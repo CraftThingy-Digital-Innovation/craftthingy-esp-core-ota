@@ -40,6 +40,9 @@ public:
     // Anti-replay filter check: rejects already-seen nonces or invalid sequence counters
     static bool checkAndRecordNonce(const String& nonce, uint32_t sequence);
 
+    // Reset sequence counter & nonce cache (used when re-seeding the rolling key)
+    static void resetSequence(uint32_t startSeq = 0);
+
     // Hex conversion helpers
     static void bytesToHex(const uint8_t* in, size_t len, char* out);
     static bool hexToBytes(const char* hex, uint8_t* out, size_t maxLen);

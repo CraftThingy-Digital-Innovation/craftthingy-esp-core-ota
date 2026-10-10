@@ -141,6 +141,7 @@ void RestApi::setupRoutes() {
     // Security & Key Ratchet
     _server.on("/api/v1/security/rotate-key", HTTP_POST, handleRotateKey);
     _server.on("/api/v1/security/update-token", HTTP_POST, handleUpdateToken);
+    _server.on("/api/v1/security/seed-key", HTTP_POST, handleSeedKey);
 
     // -----------------------------------------------------------------
     // Backwards-Compatible Aliases
@@ -440,6 +441,64 @@ void RestApi::handleUpdateToken() {
         sendStandardResponse(200, data);
     } else {
         sendStandardError(500, "Failed to persist new master token to storage");
+    }
+}
+
+void RestApi::handleSeedKey() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    String newSeed = _server.hasArg("seed") ? _server.arg("seed") : 
+                    (_server.hasArg("key") ? _server.arg("key") : "");
+    String seqStr = _server.hasArg("sequence") ? _server.arg("sequence") : 
+                   (_server.hasArg("seq") ? _server.arg("seq") : "1");
+    bool syncMaster = true;
+    if (_server.hasArg("sync_master")) {
+        syncMaster = (_server.arg("sync_master") == "true" || _server.arg("sync_master") == "1");
+    }
+
+    if (newSeed.length() == 0 && _server.hasArg("plain")) {
+        String body = _server.arg("plain");
+        auto extractJson = [&](const String& key) -> String {
+            int idx = body.indexOf("\"" + key + "\"");
+            if (idx < 0) return "";
+            int start = body.indexOf(':', idx) + 1;
+            int q1 = body.indexOf('"', start);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+            return "";
+        };
+        newSeed = extractJson("seed");
+        if (newSeed.length() == 0) newSeed = extractJson("key");
+        String s = extractJson("sequence");
+        if (s.length() > 0) seqStr = s;
+        if (body.indexOf("\"sync_master\":false") >= 0 || body.indexOf("\"syncMaster\":false") >= 0) {
+            syncMaster = false;
+        }
+    }
+
+    newSeed.trim();
+    if (newSeed.length() < 16) {
+        sendStandardError(400, "Seed too short: Must be at least 16 characters (recommended 64-hex characters)");
+        return;
+    }
+
+    uint32_t startingSeq = seqStr.toInt();
+    if (startingSeq == 0) startingSeq = 1;
+
+    if (ConfigStore::setRollingKeySeed(newSeed, startingSeq, syncMaster)) {
+        String data = "{";
+        data += "\"message\":\"Rolling key ratchet re-seeded successfully\",";
+        data += "\"startingSequence\":" + String(startingSeq) + ",";
+        data += "\"syncedMaster\":" + String(syncMaster ? "true" : "false") + ",";
+        data += "\"keyPrefix\":\"" + newSeed.substring(0, 8) + "...\"";
+        data += "}";
+        sendStandardResponse(200, data);
+    } else {
+        sendStandardError(500, "Failed to persist new rolling seed to flash storage");
     }
 }
 

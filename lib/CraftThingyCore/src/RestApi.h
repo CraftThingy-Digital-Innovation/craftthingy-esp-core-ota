@@ -36,6 +36,7 @@ private:
     static void handleTriggerUpdate();
     static void handleRotateKey();
     static void handleUpdateToken();
+    static void handleSeedKey();
     static void handleReboot();
     static void handleControllerStatus();
     static void handleControllerCommand();

@@ -173,6 +173,7 @@ All endpoints follow an industry-standard RESTful schema with **mandatory authen
 | `POST` | `/api/v1/ota/check` | Triggers immediate GitHub release check and OTA flash | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/security/rotate-key` | Advances HMAC rolling key ratchet for forward secrecy | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/security/update-token` | Updates master secret Bearer token in persistent storage | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/security/seed-key` | Re-seeds the rolling key ratchet with a new base key & counter | **Yes** (HMAC / Bearer) |
 
 *(Note: Legacy unversioned routes `/api/...` remain available as backward-compatible aliases).*
 
@@ -335,7 +336,33 @@ Updates the static master secret key / Tier 2 Bearer token in wear-leveled flash
 }
 ```
 
-### 10. `POST /api/v1/system/reboot`
+### 10. `POST /api/v1/security/seed-key`
+Re-seeds the HMAC-SHA256 rolling key ratchet engine with a custom base key/seed and resets the sequence counter.
+- **Auth**: HMAC Rolling Key or Bearer Token
+- **Payload**:
+```json
+{
+  "seed": "e1f2a3b4c5d60718293a4b5c6d7e8f90112233445566778899aabbccddeeff11",
+  "sequence": 1,
+  "sync_master": true
+}
+```
+- **Response**:
+```json
+{
+  "status": "success",
+  "code": 200,
+  "uptime": 452,
+  "data": {
+    "message": "Rolling key ratchet re-seeded successfully",
+    "startingSequence": 1,
+    "syncedMaster": true,
+    "keyPrefix": "e1f2a3b4..."
+  }
+}
+```
+
+### 11. `POST /api/v1/system/reboot`
 Safely restarts the microcontroller.
 - **Auth**: HMAC Rolling Key or Bearer Token
 

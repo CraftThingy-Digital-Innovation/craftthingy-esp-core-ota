@@ -68,6 +68,12 @@ python craftthingy_esp_ctl.py rotate-key --host 192.168.4.1 --key "<CURRENT_KEY>
 # Update Master Bearer Token (for Home Assistant / External Controller)
 python craftthingy_esp_ctl.py set-token --host 192.168.4.1 --new-token "MySecretKey2026!" --key "<CURRENT_KEY>"
 
+# Re-seed the Rolling Key Ratchet (Brand new seed & sequence counter)
+python craftthingy_esp_ctl.py seed-key --host 192.168.4.1 \
+  --new-seed "e1f2a3b4c5d60718293a4b5c6d7e8f90112233445566778899aabbccddeeff11" \
+  --start-seq 1 \
+  --key "<CURRENT_KEY>"
+
 # Reboot device
 python craftthingy_esp_ctl.py reboot --host 192.168.4.1 --key "<CURRENT_KEY>"
 ```

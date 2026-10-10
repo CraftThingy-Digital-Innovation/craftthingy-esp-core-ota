@@ -34,6 +34,9 @@ public:
     // Update Master Secret Key / Static Bearer Token
     static bool setMasterSecretKey(const String& newKey);
 
+    // Re-seed the rolling key ratchet with a new base seed & starting sequence
+    static bool setRollingKeySeed(const String& newSeed, uint32_t startingSequence = 1, bool syncMaster = true);
+
     // Update GitHub target configuration
     static bool setGitHubConfig(const String& org, const String& coreRepo, 
                                 const String& controllerRepo, const String& token);

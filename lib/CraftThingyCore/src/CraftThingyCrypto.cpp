@@ -183,6 +183,14 @@ bool CraftThingyCrypto::checkAndRecordNonce(const String& nonce, uint32_t sequen
     return true;
 }
 
+void CraftThingyCrypto::resetSequence(uint32_t startSeq) {
+    _lastSequence = startSeq;
+    _nonceIndex = 0;
+    for (size_t i = 0; i < CRAFT_MAX_NONCE_CACHE; ++i) {
+        _recentNonces[i] = "";
+    }
+}
+
 bool CraftThingyCrypto::verifyRequestSignature(const String& key,
                                                const String& method,
                                                const String& path,

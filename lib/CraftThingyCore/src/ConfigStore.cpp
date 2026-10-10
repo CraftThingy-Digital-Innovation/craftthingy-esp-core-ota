@@ -184,6 +184,17 @@ bool ConfigStore::setMasterSecretKey(const String& newKey) {
     return save();
 }
 
+bool ConfigStore::setRollingKeySeed(const String& newSeed, uint32_t startingSequence, bool syncMaster) {
+    if (newSeed.length() == 0) return false;
+    strncpy(_config.currentRollingKey, newSeed.c_str(), sizeof(_config.currentRollingKey) - 1);
+    _config.rollingSequence = startingSequence;
+    if (syncMaster) {
+        strncpy(_config.masterSecretKey, newSeed.c_str(), sizeof(_config.masterSecretKey) - 1);
+    }
+    CraftThingyCrypto::resetSequence(startingSequence > 0 ? startingSequence - 1 : 0);
+    return save();
+}
+
 bool ConfigStore::setGitHubConfig(const String& org, const String& coreRepo, 
                                   const String& controllerRepo, const String& token) {
     if (org.length() > 0) strncpy(_config.githubOrg, org.c_str(), sizeof(_config.githubOrg) - 1);

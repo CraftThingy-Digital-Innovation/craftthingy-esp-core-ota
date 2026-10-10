@@ -101,6 +101,13 @@ def main():
     token_parser = subparsers.add_parser("set-token", help="Update the master Bearer token / secret key")
     token_parser.add_argument("--new-token", required=True, help="New secret Bearer token (min 16 chars)")
 
+    # Seed Rolling Key
+    seed_parser = subparsers.add_parser("seed-key", help="Re-seed the rolling key ratchet with a new base seed & sequence")
+    seed_parser.add_argument("--new-seed", required=True, help="New secret seed (min 16 chars, recommended 64-hex)")
+    seed_parser.add_argument("--start-seq", type=int, default=1, help="Starting sequence counter (default: 1)")
+    seed_parser.add_argument("--no-sync-master", dest="sync_master", action="store_false", help="Do NOT sync master secret key")
+    seed_parser.set_defaults(sync_master=True)
+
     # Controller Commands
     subparsers.add_parser("pump-status", help="Get live water pump / controller telemetry")
     subparsers.add_parser("pump-stop", help="🚨 EMERGENCY INTERRUPT: Stop the pump immediately")
@@ -164,6 +171,18 @@ def main():
         print("[+] Token Update Result:")
         print(json.dumps(res, indent=2))
         print(f"\n[!] Master Bearer token updated successfully! Use this token for external controllers.")
+
+    elif args.command == "seed-key":
+        payload = {
+            "seed": args.new_seed,
+            "sequence": args.start_seq,
+            "sync_master": args.sync_master
+        }
+        res = send_signed_request(args.host, "POST", "/api/v1/security/seed-key", args.key, args.seq, payload)
+        print("[+] Rolling Key Re-Seed Result:")
+        print(json.dumps(res, indent=2))
+        print(f"\n[!] Rolling key re-seeded to sequence {args.start_seq}!")
+        print(f"[!] SAVE YOUR NEW SEED/KEY: {args.new_seed}")
 
     elif args.command == "pump-status":
         res = send_signed_request(args.host, "GET", "/api/v1/device/status", args.key, args.seq)
