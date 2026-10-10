@@ -259,7 +259,8 @@
       'X-Signature': signature,
       'X-Timestamp': timestamp,
       'X-Nonce': nonce,
-      'X-Sequence': rollingSeq.toString()
+      'X-Sequence': rollingSeq.toString(),
+      'Authorization': `Bearer ${key}`
     };
 
     const options = { method, headers };
@@ -274,43 +275,50 @@
 
   async function fetchStatus() {
     try {
-      const host = document.getElementById('espHost').value.trim();
-      const res = await fetch(`http://${host}/api/status`);
-      const data = await res.json();
+      const json = await apiRequest('GET', '/api/v1/system/status');
+      const data = json.data || json;
+      const sys = data.system || data;
+      const net = data.network || {};
+      const ota = data.ota || {};
+      const sec = data.security || {};
+      const ctrl = data.device || data.controller;
 
-      document.getElementById('valChip').textContent = `${data.chip} (${data.boardTarget})`;
-      document.getElementById('valFlash').textContent = `${(data.flashBytes / 1024 / 1024).toFixed(1)} MB`;
-      document.getElementById('valCoreVer').textContent = data.coreVersion;
-      document.getElementById('valRole').textContent = data.activeRole;
-      document.getElementById('valWifi').textContent = data.wifiState;
-      document.getElementById('valIp').textContent = data.ip;
-      document.getElementById('valSeq').textContent = data.rollingSequence;
-      document.getElementById('valOta').textContent = data.otaStatus;
+      document.getElementById('valChip').textContent = sys.chip ? `${sys.chip} (${sys.boardTarget || ''})` : (data.chip || "Unknown");
+      document.getElementById('valFlash').textContent = sys.flashBytes ? `${(sys.flashBytes / 1024 / 1024).toFixed(1)} MB` : (data.flashBytes ? `${(data.flashBytes / 1024 / 1024).toFixed(1)} MB` : "1.0 MB");
+      document.getElementById('valCoreVer').textContent = sys.coreVersion || data.coreVersion || "1.0.0";
+      document.getElementById('valRole').textContent = ota.activeRole || data.activeRole || "water_pump";
+      document.getElementById('valWifi').textContent = net.state || data.wifiState || "ap_mode";
+      document.getElementById('valIp').textContent = net.ip || data.ip || "192.168.4.1";
+      document.getElementById('valSeq').textContent = sec.rollingSequence !== undefined ? sec.rollingSequence : (data.rollingSequence || 1);
+      document.getElementById('valOta').textContent = ota.status || data.otaStatus || "Idle";
 
       // Controller telemetry
-      if (data.controller) {
-        const c = data.controller;
-        const isRunning = c.pumpRunning || c.motorActive;
+      if (ctrl) {
+        const isRunning = ctrl.pumpRunning || ctrl.motorActive;
         const runningEl = document.getElementById('ctrlRunning');
         runningEl.textContent = isRunning ? "RUNNING" : "STOPPED";
         runningEl.style.color = isRunning ? "#22c55e" : "#94a3b8";
 
         let modeText = "AUTO";
-        if (c.interrupted) modeText = "INTERRUPTED (STOPPED)";
-        else if (!c.autoMode) modeText = "MANUAL";
-        if (c.dryRunAlarm) modeText += " [SAFETY TRIPPED]";
+        if (ctrl.interrupted) modeText = "INTERRUPTED (STOPPED)";
+        else if (!ctrl.autoMode) modeText = "MANUAL";
+        if (ctrl.dryRunAlarm) modeText += " [SAFETY TRIPPED]";
         document.getElementById('ctrlMode').textContent = modeText;
 
-        if (c.tankDemandsFill !== undefined) {
-          document.getElementById('ctrlSensor').textContent = c.tankDemandsFill ? "LOW (FILL REQUIRED)" : "FULL / NORMAL";
+        if (ctrl.tankDemandsFill !== undefined) {
+          document.getElementById('ctrlSensor').textContent = ctrl.tankDemandsFill ? "LOW (FILL REQUIRED)" : "FULL / NORMAL";
         }
-        if (c.runDurationSec !== undefined) {
-          document.getElementById('ctrlDuration').textContent = `${c.runDurationSec}s`;
+        if (ctrl.runDurationSec !== undefined) {
+          document.getElementById('ctrlDuration').textContent = `${ctrl.runDurationSec}s`;
         }
       }
 
-      rollingSeq = data.rollingSequence + 1;
-      log(`Status updated successfully. ESP IP: ${data.ip}`);
+      if (sec.rollingSequence !== undefined) {
+        rollingSeq = sec.rollingSequence + 1;
+      } else if (data.rollingSequence !== undefined) {
+        rollingSeq = data.rollingSequence + 1;
+      }
+      log(`Status updated successfully. ESP IP: ${net.ip || data.ip || '192.168.4.1'}`);
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
     }
@@ -319,8 +327,9 @@
   async function sendControllerCommand(cmd) {
     try {
       log(`Sending command '${cmd}' to controller...`);
-      const res = await apiRequest('POST', '/api/controller/command', { cmd });
-      log(`Result: ${res.message || JSON.stringify(res)}`);
+      const res = await apiRequest('POST', '/api/v1/device/command', { cmd });
+      const msg = res.data?.message || res.message || (res.status === 'success' ? 'Command executed successfully' : JSON.stringify(res));
+      log(`Result: ${msg}`);
       setTimeout(fetchStatus, 300);
     } catch (e) {
       log(`Command failed: ${e.message}`);
@@ -330,9 +339,8 @@
   async function scanWiFi() {
     try {
       log("Scanning nearby networks...");
-      const host = document.getElementById('espHost').value.trim();
-      const res = await fetch(`http://${host}/api/wifi/scan`);
-      const networks = await res.json();
+      const json = await apiRequest('GET', '/api/v1/wifi/scan');
+      const networks = Array.isArray(json) ? json : (json.data && Array.isArray(json.data) ? json.data : []);
 
       const sel = document.getElementById('scannedSsids');
       sel.innerHTML = '<option value="">-- Select Detected SSID --</option>';
@@ -354,7 +362,7 @@
       const pass = document.getElementById('wifiPass').value;
       if (!ssid) { alert("Please enter SSID"); return; }
 
-      await apiRequest('POST', '/api/wifi', { ssid, pass });
+      await apiRequest('POST', '/api/v1/wifi/config', { ssid, pass });
       log("WiFi credentials sent! ESP is connecting in background.");
     } catch (e) {
       log(`Error saving WiFi: ${e.message}`);
@@ -369,10 +377,11 @@
       const role = document.getElementById('deviceRole').value;
       const token = document.getElementById('ghToken').value.trim();
 
-      const res = await apiRequest('POST', '/api/github', { org, core_repo, controller_repo, role, token });
-      if (res.newRollingKey) {
-        document.getElementById('secretKey').value = res.newRollingKey;
-        log(`Key ratcheted! New key: ${res.newRollingKey}`);
+      const res = await apiRequest('POST', '/api/v1/github/config', { org, core_repo, controller_repo, role, token });
+      const newKey = res.data?.newRollingKey || res.newRollingKey;
+      if (newKey) {
+        document.getElementById('secretKey').value = newKey;
+        log(`Key ratcheted! New key: ${newKey}`);
       }
     } catch (e) {
       log(`Error saving GitHub settings: ${e.message}`);
@@ -381,10 +390,11 @@
 
   async function rotateKey() {
     try {
-      const res = await apiRequest('POST', '/api/key/rotate');
-      if (res.newRollingKey) {
-        document.getElementById('secretKey').value = res.newRollingKey;
-        log(`Key advanced manually! New key: ${res.newRollingKey}`);
+      const res = await apiRequest('POST', '/api/v1/security/rotate-key');
+      const newKey = res.data?.newRollingKey || res.newRollingKey;
+      if (newKey) {
+        document.getElementById('secretKey').value = newKey;
+        log(`Key advanced manually! New key: ${newKey}`);
       }
     } catch (e) {
       log(`Error rotating key: ${e.message}`);
@@ -393,7 +403,7 @@
 
   async function triggerUpdate() {
     try {
-      await apiRequest('POST', '/api/update');
+      await apiRequest('POST', '/api/v1/ota/check');
       log("OTA update check triggered!");
     } catch (e) {
       log(`Error triggering update: ${e.message}`);
@@ -403,7 +413,7 @@
   async function rebootDevice() {
     if (!confirm("Are you sure you want to reboot the ESP?")) return;
     try {
-      await apiRequest('POST', '/api/reboot');
+      await apiRequest('POST', '/api/v1/system/reboot');
       log("Reboot command sent.");
     } catch (e) {
       log(`Reboot error: ${e.message}`);

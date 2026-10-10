@@ -19,11 +19,16 @@ public:
     // Verify HMAC-SHA256 rolling key signature or Bearer/Basic Auth
     static bool isRequestAuthorized(ApiServerType& server, String& outMethod);
 
+    // Standardized REST Response Helpers (Envelopes)
+    static void sendStandardResponse(int httpCode, const String& dataJson);
+    static void sendStandardError(int httpCode, const String& message, const String& reason = "");
+    static void sendStandardSuccess(const String& message);
+
 private:
     static ApiServerType _server;
     static void setupRoutes();
 
-    // Handlers
+    // Standardized Endpoints
     static void handleStatus();
     static void handleWifiScan();
     static void handleWifiConfig();
@@ -34,9 +39,4 @@ private:
     static void handleControllerStatus();
     static void handleControllerCommand();
     static void handleNotFound();
-
-    // Helper JSON response senders
-    static void sendJson(int code, const String& json);
-    static void sendError(int code, const String& error);
-    static void sendSuccess(const String& msg);
 };

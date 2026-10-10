@@ -110,18 +110,18 @@ def main():
     args = parser.parse_args()
 
     if args.command == "status":
-        res = send_signed_request(args.host, "GET", "/api/status", args.key, args.seq)
+        res = send_signed_request(args.host, "GET", "/api/v1/system/status", args.key, args.seq)
         print("[+] Device Status:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "scan-wifi":
-        res = send_signed_request(args.host, "GET", "/api/wifi/scan", args.key, args.seq)
+        res = send_signed_request(args.host, "GET", "/api/v1/wifi/scan", args.key, args.seq)
         print("[+] Nearby WiFi Networks:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "set-wifi":
         payload = {"ssid": args.ssid, "pass": args.password}
-        res = send_signed_request(args.host, "POST", "/api/wifi", args.key, args.seq, payload)
+        res = send_signed_request(args.host, "POST", "/api/v1/wifi/config", args.key, args.seq, payload)
         print("[+] WiFi Configuration Result:")
         print(json.dumps(res, indent=2))
 
@@ -133,52 +133,54 @@ def main():
             "role": args.role,
             "token": args.token
         }
-        res = send_signed_request(args.host, "POST", "/api/github", args.key, args.seq, payload)
+        res = send_signed_request(args.host, "POST", "/api/v1/github/config", args.key, args.seq, payload)
         print("[+] GitHub Configuration Result:")
         print(json.dumps(res, indent=2))
-        if "newRollingKey" in res:
-            print(f"\n[!] IMPORTANT: Rolling Key ratcheted to sequence {res['newRollingSequence']}!")
-            print(f"[!] SAVE YOUR NEW KEY: {res['newRollingKey']}")
+        data_block = res.get("data", {}) if isinstance(res.get("data"), dict) else res
+        if "newRollingKey" in data_block:
+            print(f"\n[!] IMPORTANT: Rolling Key ratcheted to sequence {data_block.get('newRollingSequence')}!")
+            print(f"[!] SAVE YOUR NEW KEY: {data_block.get('newRollingKey')}")
 
     elif args.command == "trigger-update":
-        res = send_signed_request(args.host, "POST", "/api/update", args.key, args.seq)
+        res = send_signed_request(args.host, "POST", "/api/v1/ota/check", args.key, args.seq)
         print("[+] Update Trigger Result:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "rotate-key":
-        res = send_signed_request(args.host, "POST", "/api/key/rotate", args.key, args.seq)
+        res = send_signed_request(args.host, "POST", "/api/v1/security/rotate-key", args.key, args.seq)
         print("[+] Key Rotation Result:")
         print(json.dumps(res, indent=2))
-        if "newRollingKey" in res:
-            print(f"\n[!] New Key: {res['newRollingKey']}")
+        data_block = res.get("data", {}) if isinstance(res.get("data"), dict) else res
+        if "newRollingKey" in data_block:
+            print(f"\n[!] New Key: {data_block.get('newRollingKey')}")
 
     elif args.command == "pump-status":
-        res = send_signed_request(args.host, "GET", "/api/controller/status", args.key, args.seq)
+        res = send_signed_request(args.host, "GET", "/api/v1/device/status", args.key, args.seq)
         print("[+] Water Pump / Controller Telemetry:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "pump-stop":
-        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "interrupt"})
+        res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, {"cmd": "interrupt"})
         print("[!] 🚨 EMERGENCY INTERRUPT RESULT:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "pump-start":
-        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "start"})
+        res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, {"cmd": "start"})
         print("[+] Pump Manual Start Result:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "pump-auto":
-        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "auto"})
+        res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, {"cmd": "auto"})
         print("[+] Operation Resumed (Auto Mode):")
         print(json.dumps(res, indent=2))
 
     elif args.command == "pump-reset-safety":
-        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "reset_safety"})
+        res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, {"cmd": "reset_safety"})
         print("[+] Safety Alarm Reset Result:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "reboot":
-        res = send_signed_request(args.host, "POST", "/api/reboot", args.key, args.seq)
+        res = send_signed_request(args.host, "POST", "/api/v1/system/reboot", args.key, args.seq)
         print("[+] Reboot Result:")
         print(json.dumps(res, indent=2))
 

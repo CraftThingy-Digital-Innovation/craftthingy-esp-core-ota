@@ -89,7 +89,7 @@ Incoming requests must include:
   Using the current rolling key.
 
 ### 2. Rolling Key Ratchet (Forward Secrecy)
-After any configuration change (or via `/api/key/rotate`), the device derives the next key using:
+After any configuration change (or via `/api/v1/security/rotate-key`), the device derives the next key using:
 $$K_{n+1} = \text{HMAC-SHA256}(K_n, \text{"CRAFT\_ROLL\_KEY\_"} + n)$$
 The old key is permanently erased from flash memory. If an attacker intercepts a past request, they cannot forge future commands.
 
@@ -133,46 +133,154 @@ GitHub release asset URLs redirect (HTTP 302) to AWS S3 (`objects.githubusercont
 
 ---
 
-## 🌐 REST API Reference (Port 80)
+## 🌐 Standardized REST API Specification (`v1`, Port 80)
 
-### 1. `GET /api/status`
-Returns live hardware metrics, version info, and WiFi status.
-- **Auth**: None
-- **Response**:
+All endpoints follow an industry-standard RESTful schema with **mandatory authentication** across all routes (including telemetry and WiFi scans) to prevent unauthorized surveillance or physical machinery manipulation. Responses are formatted with a consistent **JSend envelope**:
+
+### Standard Response Envelope
 ```json
+// Success Response (HTTP 200)
 {
-  "status": "online",
-  "coreVersion": "1.0.0",
-  "boardTarget": "esp01s",
-  "chip": "ESP8266 (ESP-01S 1MB)",
-  "flashBytes": 1048576,
-  "freeHeap": 36840,
-  "mac": "84:F3:EB:12:34:56",
-  "wifiState": "connected",
-  "ip": "192.168.1.105",
-  "activeRole": "water_pump",
-  "githubOrg": "CraftThingy-Digital-Innovation",
-  "coreRepo": "craftthingy-esp-core-ota",
-  "controllerRepo": "craftthingy-esp-water-pump",
-  "rollingSequence": 3,
-  "currentRollingKeyPrefix": "a1b2c3d4...",
-  "otaStatus": "Firmware Up to Date"
+  "status": "success",
+  "code": 200,
+  "uptime": 1420,
+  "data": { ... }
+}
+
+// Error Response (HTTP 400 / 401 / 404 / 500)
+{
+  "status": "error",
+  "code": 401,
+  "uptime": 1420,
+  "error": {
+    "message": "Unauthorized: Valid HMAC signature or Bearer token required",
+    "reason": "invalid_signature"
+  }
 }
 ```
 
-### 2. `GET /api/wifi/scan`
-Scans and lists nearby wireless networks.
-- **Auth**: None
+### Endpoints Overview
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/v1/system/status` | Comprehensive system, network, OTA & controller telemetry | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/system/reboot` | Safely reboots the microcontroller | **Yes** (HMAC / Bearer) |
+| `GET` | `/api/v1/device/status` | Live hardware controller metrics (e.g., pump state, water level) | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/device/command` | Execute hardware commands (`interrupt`, `start`, `auto`, `reset_safety`) | **Yes** (HMAC / Bearer) |
+| `GET` | `/api/v1/wifi/scan` | Scans nearby 2.4GHz WiFi SSIDs and signal strengths | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/wifi/config` | Saves SSID/password and connects in background | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/github/config` | Updates target GitHub repos and ratchets rolling key | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/ota/check` | Triggers immediate GitHub release check and OTA flash | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/security/rotate-key` | Advances HMAC rolling key ratchet for forward secrecy | **Yes** (HMAC / Bearer) |
+
+*(Note: Legacy unversioned routes `/api/...` remain available as backward-compatible aliases).*
+
+---
+
+### 1. `GET /api/v1/system/status`
+Returns complete device metrics, networking, OTA targets, and attached controller state.
+- **Headers**: `X-Signature`, `X-Timestamp`, `X-Nonce`, `X-Sequence` OR `Authorization: Bearer <key>`
 - **Response**:
 ```json
-[
-  {"ssid": "Home-Network", "rssi": -55, "enc": true},
-  {"ssid": "Workshop", "rssi": -72, "enc": true}
-]
+{
+  "status": "success",
+  "code": 200,
+  "uptime": 342,
+  "data": {
+    "system": {
+      "status": "online",
+      "coreVersion": "1.0.0",
+      "boardTarget": "esp01s",
+      "chip": "ESP8266 (ESP-01S 1MB)",
+      "flashBytes": 1048576,
+      "freeHeap": 36840,
+      "mac": "84:F3:EB:12:34:56"
+    },
+    "network": {
+      "state": "connected",
+      "ip": "192.168.1.105",
+      "ssid": "Home-Network"
+    },
+    "ota": {
+      "status": "Firmware Up to Date",
+      "org": "CraftThingy-Digital-Innovation",
+      "coreRepo": "craftthingy-esp-core-ota",
+      "controllerRepo": "craftthingy-esp-water-pump",
+      "activeRole": "water_pump"
+    },
+    "security": {
+      "rollingSequence": 3,
+      "currentRollingKeyPrefix": "a1b2c3d4..."
+    },
+    "device": {
+      "role": "water_pump",
+      "pumpRunning": true,
+      "interrupted": false,
+      "autoMode": true,
+      "tankDemandsFill": true,
+      "dryRunAlarm": false,
+      "runDurationSec": 45,
+      "maxRunTimeSec": 900
+    }
+  }
+}
 ```
 
-### 3. `POST /api/wifi`
-Configures WiFi credentials and attempts immediate connection.
+### 2. `GET /api/v1/device/status` (Alias: `/api/v1/pump/status`)
+Returns hardware controller telemetry directly.
+- **Auth**: HMAC Rolling Key or Bearer Token
+- **Response**:
+```json
+{
+  "status": "success",
+  "code": 200,
+  "uptime": 342,
+  "data": {
+    "role": "water_pump",
+    "pumpRunning": false,
+    "interrupted": false,
+    "autoMode": true,
+    "tankDemandsFill": false,
+    "dryRunAlarm": false,
+    "runDurationSec": 0,
+    "maxRunTimeSec": 900
+  }
+}
+```
+
+### 3. `POST /api/v1/device/command` (Alias: `/api/v1/pump/command`)
+Executes immediate operational controls on the pump or appliance.
+- **Auth**: HMAC Rolling Key or Bearer Token
+- **Payload (`JSON` or form parameters)**:
+```json
+{
+  "cmd": "interrupt"
+}
+```
+Available commands:
+- `interrupt` (or `stop`, `off`): **Immediate emergency stop**. Cuts relay power instantly and disables auto-mode.
+- `start` (or `on`): Manually forces pump relay ON.
+- `auto` (or `resume`): Clears manual/interrupted states and returns to autonomous float switch sensing.
+- `reset_safety`: Resets the 15-minute dry-run safety lockout alarm.
+
+### 4. `GET /api/v1/wifi/scan`
+Scans and lists nearby wireless networks.
+- **Auth**: HMAC Rolling Key or Bearer Token
+- **Response**:
+```json
+{
+  "status": "success",
+  "code": 200,
+  "uptime": 345,
+  "data": [
+    {"ssid": "Home-Network", "rssi": -55, "enc": true},
+    {"ssid": "Workshop", "rssi": -72, "enc": true}
+  ]
+}
+```
+
+### 5. `POST /api/v1/wifi/config`
+Configures WiFi credentials and attempts immediate background connection.
 - **Auth**: HMAC Rolling Key or Bearer Token
 - **Payload**:
 ```json
@@ -182,8 +290,8 @@ Configures WiFi credentials and attempts immediate connection.
 }
 ```
 
-### 4. `POST /api/github`
-Reconfigures target GitHub organization, repositories, and role.
+### 6. `POST /api/v1/github/config`
+Reconfigures target GitHub organization, repositories, and role, automatically advancing the rolling key ratchet for forward secrecy.
 - **Auth**: HMAC Rolling Key or Bearer Token
 - **Payload**:
 ```json
@@ -195,18 +303,17 @@ Reconfigures target GitHub organization, repositories, and role.
   "token": ""
 }
 ```
-- **Response**: Returns the next ratcheted rolling key and sequence counter.
 
-### 5. `POST /api/update`
-Forces an immediate GitHub release check and OTA flash.
+### 7. `POST /api/v1/ota/check`
+Forces an immediate dual-tier GitHub release check and OTA flash.
 - **Auth**: HMAC Rolling Key or Bearer Token
 
-### 6. `POST /api/key/rotate`
+### 8. `POST /api/v1/security/rotate-key`
 Manually advances the rolling key ratchet forward by one sequence.
 - **Auth**: HMAC Rolling Key or Bearer Token
 
-### 7. `POST /api/reboot`
-Restarts the microcontroller.
+### 9. `POST /api/v1/system/reboot`
+Safely restarts the microcontroller.
 - **Auth**: HMAC Rolling Key or Bearer Token
 
 ---
