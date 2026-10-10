@@ -29,6 +29,8 @@ private:
     static void setupRoutes();
 
     // Standardized Endpoints
+    static void handleRootPortal();
+    static void handleSetupPost();
     static void handleStatus();
     static void handleWifiScan();
     static void handleWifiConfig();

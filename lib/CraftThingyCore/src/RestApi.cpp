@@ -5,6 +5,7 @@
 #include "ModuleDetector.h"
 #include "CraftThingyCrypto.h"
 #include "CraftThingyCore.h"
+#include "CaptivePortalHtml.h"
 
 ApiServerType RestApi::_server(CRAFT_WEB_PORT);
 
@@ -117,11 +118,34 @@ bool RestApi::isRequestAuthorized(ApiServerType& server, String& outMethod) {
         return true;
     }
 
+    // Tier 4: SoftAP Setup Mode (Permits mobile phone captive portal without HMAC keys)
+    if (WiFiManager::isAPMode()) {
+        String uri = server.uri();
+        if (uri == "/" || uri == "/setup" || uri.startsWith("/api/v1/wifi/") || 
+            uri == "/api/v1/system/status" || uri == "/api/v1/system/name" || uri == "/api/v1/device/name") {
+            outMethod = "ap_portal_local";
+            return true;
+        }
+    }
+
     outMethod = "unauthorized";
     return false;
 }
 
 void RestApi::setupRoutes() {
+    // -----------------------------------------------------------------
+    // Captive Portal & Mobile Browser Setup Routes
+    // -----------------------------------------------------------------
+    _server.on("/", HTTP_GET, handleRootPortal);
+    _server.on("/setup", HTTP_GET, handleRootPortal);
+    _server.on("/setup", HTTP_POST, handleSetupPost);
+    _server.on("/generate_204", HTTP_GET, handleRootPortal);
+    _server.on("/gen_204", HTTP_GET, handleRootPortal);
+    _server.on("/hotspot-detect.html", HTTP_GET, handleRootPortal);
+    _server.on("/canonical.html", HTTP_GET, handleRootPortal);
+    _server.on("/ncsi.txt", HTTP_GET, handleRootPortal);
+    _server.on("/connecttest.txt", HTTP_GET, handleRootPortal);
+
     // -----------------------------------------------------------------
     // Standardized v1 API Endpoints (All Authenticated for Safety)
     // -----------------------------------------------------------------
@@ -734,6 +758,68 @@ void RestApi::handleReboot() {
     ESP.restart();
 }
 
+void RestApi::handleRootPortal() {
+    _server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    _server.sendHeader("Pragma", "no-cache");
+    _server.sendHeader("Expires", "-1");
+    _server.send(200, "text/html", FPSTR(CAPTIVE_PORTAL_HTML));
+}
+
+void RestApi::handleSetupPost() {
+    String ssid = _server.hasArg("ssid") ? _server.arg("ssid") : "";
+    String pass = _server.hasArg("pass") ? _server.arg("pass") : "";
+    String name = _server.hasArg("name") ? _server.arg("name") : "";
+    String apSsid = _server.hasArg("ap_ssid") ? _server.arg("ap_ssid") : "";
+    String apPass = _server.hasArg("ap_pass") ? _server.arg("ap_pass") : "";
+
+    if (ssid.length() == 0 && _server.hasArg("plain")) {
+        String body = _server.arg("plain");
+        auto extractJson = [&](const String& key) -> String {
+            int idx = body.indexOf("\"" + key + "\"");
+            if (idx < 0) return "";
+            int start = body.indexOf(':', idx) + 1;
+            int q1 = body.indexOf('"', start);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+            return "";
+        };
+
+        if (ssid.length() == 0) ssid = extractJson("ssid");
+        if (pass.length() == 0) pass = extractJson("pass");
+        if (name.length() == 0) name = extractJson("name");
+        if (apSsid.length() == 0) apSsid = extractJson("ap_ssid");
+        if (apPass.length() == 0) apPass = extractJson("ap_pass");
+    }
+
+    ssid.trim();
+    if (ssid.length() == 0) {
+        sendStandardError(400, "Missing required 'ssid' parameter");
+        return;
+    }
+
+    name.trim();
+    if (name.length() > 0) {
+        ConfigStore::setDeviceName(name);
+        WiFiManager::setDeviceName(name);
+    }
+
+    apSsid.trim();
+    apPass.trim();
+    if (apSsid.length() > 0 || apPass.length() > 0) {
+        if (apPass.length() > 0 && apPass.length() < 8) {
+            sendStandardError(400, "AP password must be at least 8 characters");
+            return;
+        }
+        ConfigStore::setAPConfig(apSsid, apPass);
+        WiFiManager::configureAP(apSsid, apPass);
+    }
+
+    ConfigStore::setWiFiConfig(ssid, pass);
+    sendStandardSuccess("Configuration saved! ESP connecting to: " + ssid);
+
+    WiFiManager::connectSTA(ssid.c_str(), pass.c_str(), CRAFT_WIFI_MAX_RETRIES);
+}
+
 void RestApi::handleNotFound() {
     if (_server.method() == HTTP_OPTIONS) {
         _server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -741,6 +827,16 @@ void RestApi::handleNotFound() {
         _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization");
         _server.send(204);
         return;
+    }
+
+    // In SoftAP mode, intercept unmatched captive portal requests (e.g. Apple / Android / Windows) and redirect to setup portal
+    if (WiFiManager::isAPMode()) {
+        String uri = _server.uri();
+        if (!uri.startsWith("/api/")) {
+            _server.sendHeader("Location", "http://192.168.4.1/");
+            _server.send(302, "text/plain", "");
+            return;
+        }
     }
 
     sendStandardError(404, "Endpoint not found", _server.uri());
