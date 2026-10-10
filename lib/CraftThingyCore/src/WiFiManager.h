@@ -39,11 +39,15 @@ public:
 
     static String getIPAddress();
     static String getAPIPAddress();
+    static String getGatewayIP();
+    static String getSubnetMask();
+    static String getDnsIP();
     static String getMacAddress();
     static String getApSSID();
     static bool isAPPasswordSet();
     static void configureAP(const String& ssid, const String& password);
     static void setDeviceName(const String& name);
+    static void initMDNS();
 
     // Scan nearby networks and return JSON list
     static String scanNetworksJson();
@@ -53,6 +57,8 @@ private:
     static DNSServer _dnsServer;
     static String _apSSID;
     static uint32_t _lastReconnectAttempt;
+    static uint32_t _connectingStartMs;
     static uint8_t _retryCount;
     static bool _dnsActive;
+    static bool _mdnsActive;
 };

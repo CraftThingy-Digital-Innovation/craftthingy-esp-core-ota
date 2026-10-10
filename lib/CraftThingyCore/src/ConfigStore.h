@@ -20,6 +20,12 @@ struct DeviceConfig {
     char deviceName[32];
     char apSsid[33];
     char apPassword[65];
+    bool wifiUseStaticIp;
+    char wifiStaticIp[16];
+    char wifiGateway[16];
+    char wifiSubnet[16];
+    char wifiDns1[16];
+    char wifiDns2[16];
 };
 
 class ConfigStore {
@@ -44,8 +50,14 @@ public:
     static bool setGitHubConfig(const String& org, const String& coreRepo, 
                                 const String& controllerRepo, const String& token);
 
-    // Update WiFi configuration
-    static bool setWiFiConfig(const String& ssid, const String& pass);
+    // Update WiFi configuration (supports DHCP or Static IP)
+    static bool setWiFiConfig(const String& ssid, const String& pass,
+                              bool useStatic = false,
+                              const String& staticIp = "",
+                              const String& gateway = "",
+                              const String& subnet = "255.255.255.0",
+                              const String& dns1 = "",
+                              const String& dns2 = "");
 
     // Update Active Role
     static bool setActiveRole(const String& role);

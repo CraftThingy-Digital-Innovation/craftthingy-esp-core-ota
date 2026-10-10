@@ -224,8 +224,15 @@ void RestApi::handleStatus() {
     data += "},";
 
     data += "\"network\":{";
-    data += "\"state\":\"" + String(WiFiManager::isConnected() ? "connected" : "ap_mode") + "\",";
+    data += "\"state\":\"" + String(WiFiManager::isConnected() ? "connected" : (WiFiManager::getState() == WIFI_STATE_CONNECTING ? "connecting" : "ap_mode")) + "\",";
     data += "\"ip\":\"" + (WiFiManager::isConnected() ? WiFiManager::getIPAddress() : WiFiManager::getAPIPAddress()) + "\",";
+    data += "\"staIp\":\"" + WiFiManager::getIPAddress() + "\",";
+    data += "\"apIp\":\"" + WiFiManager::getAPIPAddress() + "\",";
+    data += "\"gateway\":\"" + WiFiManager::getGatewayIP() + "\",";
+    data += "\"subnet\":\"" + WiFiManager::getSubnetMask() + "\",";
+    data += "\"dns\":\"" + WiFiManager::getDnsIP() + "\",";
+    data += "\"useStatic\":" + String(cfg.wifiUseStaticIp ? "true" : "false") + ",";
+    data += "\"staticIp\":\"" + String(cfg.wifiStaticIp) + "\",";
     data += "\"ssid\":\"" + String(cfg.wifiSsid) + "\",";
     data += "\"apSsid\":\"" + WiFiManager::getApSSID() + "\",";
     data += "\"apSecured\":" + String(WiFiManager::isAPPasswordSet() ? "true" : "false");
@@ -332,31 +339,66 @@ void RestApi::handleWifiConfig() {
 
     String ssid = _server.hasArg("ssid") ? _server.arg("ssid") : "";
     String pass = _server.hasArg("pass") ? _server.arg("pass") : "";
+    bool useStatic = false;
+    String staticIp = "";
+    String gateway = "";
+    String subnet = "255.255.255.0";
+    String dns1 = "";
+    String dns2 = "";
 
-    if (ssid.length() == 0 && _server.hasArg("plain")) {
+    if (_server.hasArg("use_static")) {
+        useStatic = (_server.arg("use_static") == "true" || _server.arg("use_static") == "1");
+    } else if (_server.hasArg("useStatic")) {
+        useStatic = (_server.arg("useStatic") == "true" || _server.arg("useStatic") == "1");
+    }
+    if (_server.hasArg("static_ip")) staticIp = _server.arg("static_ip");
+    else if (_server.hasArg("staticIp")) staticIp = _server.arg("staticIp");
+    if (_server.hasArg("gateway")) gateway = _server.arg("gateway");
+    if (_server.hasArg("subnet")) subnet = _server.arg("subnet");
+    if (_server.hasArg("dns1")) dns1 = _server.arg("dns1");
+    if (_server.hasArg("dns2")) dns2 = _server.arg("dns2");
+
+    if (_server.hasArg("plain")) {
         String body = _server.arg("plain");
-        int ssidIdx = body.indexOf("\"ssid\"");
-        if (ssidIdx >= 0) {
-            int start = body.indexOf(':', ssidIdx) + 1;
+        auto extractJson = [&](const String& key) -> String {
+            int idx = body.indexOf("\"" + key + "\"");
+            if (idx < 0) return "";
+            int start = body.indexOf(':', idx) + 1;
             int q1 = body.indexOf('"', start);
             int q2 = body.indexOf('"', q1 + 1);
-            if (q1 >= 0 && q2 > q1) ssid = body.substring(q1 + 1, q2);
+            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+            return "";
+        };
+
+        if (ssid.length() == 0) ssid = extractJson("ssid");
+        if (pass.length() == 0) pass = extractJson("pass");
+        if (!useStatic && (body.indexOf("\"useStatic\":true") >= 0 || body.indexOf("\"use_static\":true") >= 0)) {
+            useStatic = true;
         }
-        int passIdx = body.indexOf("\"pass\"");
-        if (passIdx >= 0) {
-            int start = body.indexOf(':', passIdx) + 1;
-            int q1 = body.indexOf('"', start);
-            int q2 = body.indexOf('"', q1 + 1);
-            if (q1 >= 0 && q2 > q1) pass = body.substring(q1 + 1, q2);
+        if (staticIp.length() == 0) staticIp = extractJson("staticIp");
+        if (staticIp.length() == 0) staticIp = extractJson("static_ip");
+        if (gateway.length() == 0) gateway = extractJson("gateway");
+        if (subnet.length() == 0 || subnet == "255.255.255.0") {
+            String sub = extractJson("subnet");
+            if (sub.length() > 0) subnet = sub;
         }
+        if (dns1.length() == 0) dns1 = extractJson("dns1");
+        if (dns2.length() == 0) dns2 = extractJson("dns2");
     }
 
+    ssid.trim();
     if (ssid.length() == 0) {
         sendStandardError(400, "Missing required 'ssid' parameter");
         return;
     }
 
-    ConfigStore::setWiFiConfig(ssid, pass);
+    staticIp.trim();
+    gateway.trim();
+    subnet.trim();
+    dns1.trim();
+    dns2.trim();
+
+    ConfigStore::setWiFiConfig(ssid, pass, useStatic, staticIp, gateway, subnet, dns1, dns2);
     sendStandardSuccess("WiFi credentials saved. Connecting in background...");
 
     WiFiManager::connectSTA(ssid.c_str(), pass.c_str(), CRAFT_WIFI_MAX_RETRIES);
@@ -773,6 +815,24 @@ void RestApi::handleSetupPost() {
     String name = _server.hasArg("name") ? _server.arg("name") : "";
     String apSsid = _server.hasArg("ap_ssid") ? _server.arg("ap_ssid") : "";
     String apPass = _server.hasArg("ap_pass") ? _server.arg("ap_pass") : "";
+    bool useStatic = false;
+    String staticIp = "";
+    String gateway = "";
+    String subnet = "255.255.255.0";
+    String dns1 = "";
+    String dns2 = "";
+
+    if (_server.hasArg("use_static")) {
+        useStatic = (_server.arg("use_static") == "true" || _server.arg("use_static") == "1");
+    } else if (_server.hasArg("useStatic")) {
+        useStatic = (_server.arg("useStatic") == "true" || _server.arg("useStatic") == "1");
+    }
+    if (_server.hasArg("static_ip")) staticIp = _server.arg("static_ip");
+    else if (_server.hasArg("staticIp")) staticIp = _server.arg("staticIp");
+    if (_server.hasArg("gateway")) gateway = _server.arg("gateway");
+    if (_server.hasArg("subnet")) subnet = _server.arg("subnet");
+    if (_server.hasArg("dns1")) dns1 = _server.arg("dns1");
+    if (_server.hasArg("dns2")) dns2 = _server.arg("dns2");
 
     if (ssid.length() == 0 && _server.hasArg("plain")) {
         String body = _server.arg("plain");
@@ -791,6 +851,18 @@ void RestApi::handleSetupPost() {
         if (name.length() == 0) name = extractJson("name");
         if (apSsid.length() == 0) apSsid = extractJson("ap_ssid");
         if (apPass.length() == 0) apPass = extractJson("ap_pass");
+        if (!useStatic && (body.indexOf("\"useStatic\":true") >= 0 || body.indexOf("\"use_static\":true") >= 0)) {
+            useStatic = true;
+        }
+        if (staticIp.length() == 0) staticIp = extractJson("staticIp");
+        if (staticIp.length() == 0) staticIp = extractJson("static_ip");
+        if (gateway.length() == 0) gateway = extractJson("gateway");
+        if (subnet.length() == 0 || subnet == "255.255.255.0") {
+            String sub = extractJson("subnet");
+            if (sub.length() > 0) subnet = sub;
+        }
+        if (dns1.length() == 0) dns1 = extractJson("dns1");
+        if (dns2.length() == 0) dns2 = extractJson("dns2");
     }
 
     ssid.trim();
@@ -816,7 +888,13 @@ void RestApi::handleSetupPost() {
         WiFiManager::configureAP(apSsid, apPass);
     }
 
-    ConfigStore::setWiFiConfig(ssid, pass);
+    staticIp.trim();
+    gateway.trim();
+    subnet.trim();
+    dns1.trim();
+    dns2.trim();
+
+    ConfigStore::setWiFiConfig(ssid, pass, useStatic, staticIp, gateway, subnet, dns1, dns2);
     sendStandardSuccess("Configuration saved! ESP connecting to: " + ssid);
 
     WiFiManager::connectSTA(ssid.c_str(), pass.c_str(), CRAFT_WIFI_MAX_RETRIES);

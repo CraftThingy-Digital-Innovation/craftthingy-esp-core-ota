@@ -41,6 +41,12 @@ void ConfigStore::populateDefaults() {
     strncpy(_config.deviceName, "CraftThingy-Device", sizeof(_config.deviceName) - 1);
     strncpy(_config.apSsid, "", sizeof(_config.apSsid) - 1);
     strncpy(_config.apPassword, "", sizeof(_config.apPassword) - 1);
+    _config.wifiUseStaticIp = false;
+    strncpy(_config.wifiStaticIp, "", sizeof(_config.wifiStaticIp) - 1);
+    strncpy(_config.wifiGateway, "", sizeof(_config.wifiGateway) - 1);
+    strncpy(_config.wifiSubnet, "255.255.255.0", sizeof(_config.wifiSubnet) - 1);
+    strncpy(_config.wifiDns1, "8.8.8.8", sizeof(_config.wifiDns1) - 1);
+    strncpy(_config.wifiDns2, "1.1.1.1", sizeof(_config.wifiDns2) - 1);
 }
 
 bool ConfigStore::init() {
@@ -216,9 +222,32 @@ bool ConfigStore::setGitHubConfig(const String& org, const String& coreRepo,
     return save();
 }
 
-bool ConfigStore::setWiFiConfig(const String& ssid, const String& pass) {
+bool ConfigStore::setWiFiConfig(const String& ssid, const String& pass,
+                                bool useStatic,
+                                const String& staticIp,
+                                const String& gateway,
+                                const String& subnet,
+                                const String& dns1,
+                                const String& dns2) {
     strncpy(_config.wifiSsid, ssid.c_str(), sizeof(_config.wifiSsid) - 1);
+    _config.wifiSsid[sizeof(_config.wifiSsid) - 1] = '\0';
     strncpy(_config.wifiPassword, pass.c_str(), sizeof(_config.wifiPassword) - 1);
+    _config.wifiPassword[sizeof(_config.wifiPassword) - 1] = '\0';
+
+    _config.wifiUseStaticIp = useStatic;
+    if (useStatic) {
+        strncpy(_config.wifiStaticIp, staticIp.c_str(), sizeof(_config.wifiStaticIp) - 1);
+        _config.wifiStaticIp[sizeof(_config.wifiStaticIp) - 1] = '\0';
+        strncpy(_config.wifiGateway, gateway.c_str(), sizeof(_config.wifiGateway) - 1);
+        _config.wifiGateway[sizeof(_config.wifiGateway) - 1] = '\0';
+        strncpy(_config.wifiSubnet, subnet.c_str(), sizeof(_config.wifiSubnet) - 1);
+        _config.wifiSubnet[sizeof(_config.wifiSubnet) - 1] = '\0';
+        strncpy(_config.wifiDns1, dns1.c_str(), sizeof(_config.wifiDns1) - 1);
+        _config.wifiDns1[sizeof(_config.wifiDns1) - 1] = '\0';
+        strncpy(_config.wifiDns2, dns2.c_str(), sizeof(_config.wifiDns2) - 1);
+        _config.wifiDns2[sizeof(_config.wifiDns2) - 1] = '\0';
+    }
+
     _config.configured = true;
     return save();
 }

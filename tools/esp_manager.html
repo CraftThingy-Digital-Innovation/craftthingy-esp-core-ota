@@ -103,6 +103,20 @@
     </div>
   </div>
 
+  <!-- Dynamic / Assigned IP Auto-Discovery Banner -->
+  <div id="lanDiscoveryBanner" style="display:none; background:#064e3b; border:1px solid #10b981; border-left:4px solid #34d399; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-size:0.95rem; line-height:1.5;">
+    <strong style="color:#34d399; font-size:1.05rem;">🎉 Wi-Fi Connected Successfully!</strong>
+    <div style="color:#d1fae5; margin-top:6px;">
+      The ESP is now connected to <strong id="discoveredSsid"></strong>.<br>
+      Assigned Local Network IP: <strong style="font-size:1.15rem; color:#fff;" id="discoveredIp">192.168.1.xxx</strong><br>
+      <span style="font-size:0.85rem; color:#a7f3d0;">mDNS Hostname: <code id="discoveredMdns" style="background:#022c22; padding:2px 6px; border-radius:4px;">http://craftthingy-5371.local</code></span>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button style="background:#10b981; color:#064e3b; font-weight:700; flex:none; padding:8px 16px;" onclick="switchToDiscoveredIp()">Switch Manager to this IP</button>
+      <a id="openNewIpLink" href="#" target="_blank" style="display:inline-flex; align-items:center; text-decoration:none; background:#047857; color:#fff; padding:8px 16px; border-radius:6px; font-size:0.9rem; font-weight:600;">Open Direct in New Tab &rarr;</a>
+    </div>
+  </div>
+
   <!-- Connection & Key Card -->
   <div class="card">
     <h2>1. Connection & Security Key</h2>
@@ -157,6 +171,42 @@
       <label>WiFi Password</label>
       <input type="password" id="wifiPass" placeholder="Network Password">
     </div>
+
+    <!-- Static IP vs DHCP Toggle -->
+    <div class="form-group" style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);">
+      <label style="cursor:pointer; display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="useStaticIp" style="width:auto; margin:0;" onchange="toggleStaticIpFields()">
+        <span style="font-size:0.9rem; color:var(--accent);">Configure Manual Static IP (Default is DHCP Dynamic IP)</span>
+      </label>
+    </div>
+
+    <div id="staticIpFields" style="display:none; background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px;">
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div>
+          <label>Static IP Address</label>
+          <input type="text" id="staticIp" placeholder="e.g. 192.168.1.150">
+        </div>
+        <div>
+          <label>Subnet Mask</label>
+          <input type="text" id="subnetMask" value="255.255.255.0">
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+        <div>
+          <label>Default Gateway</label>
+          <input type="text" id="gatewayIp" placeholder="e.g. 192.168.1.1">
+        </div>
+        <div>
+          <label>Primary DNS</label>
+          <input type="text" id="dns1Ip" value="8.8.8.8">
+        </div>
+      </div>
+      <div>
+        <label>Secondary DNS (Optional)</label>
+        <input type="text" id="dns2Ip" value="1.1.1.1">
+      </div>
+    </div>
+
     <div class="btn-group">
       <button onclick="saveWiFi()">Save & Connect WiFi</button>
     </div>
@@ -334,7 +384,28 @@
       document.getElementById('valRole').textContent = ota.activeRole || data.activeRole || "water_pump";
       document.getElementById('valWifi').textContent = net.state || data.wifiState || "ap_mode";
       document.getElementById('valApSsid').textContent = net.apSsid ? `${net.apSsid} ${net.apSecured ? '[🔒 WPA2]' : '[Open]'}` : (net.state === 'ap_mode' ? 'Broadcasting' : '--');
-      document.getElementById('valIp').textContent = net.ip || data.ip || "192.168.4.1";
+      if (net.state === 'connected' && net.staIp && net.staIp !== '0.0.0.0') {
+        document.getElementById('valIp').textContent = `${net.staIp} (AP: ${net.apIp || '192.168.4.1'})`;
+        const banner = document.getElementById('lanDiscoveryBanner');
+        banner.style.display = 'block';
+        document.getElementById('discoveredSsid').textContent = net.ssid || "Home Wi-Fi";
+        document.getElementById('discoveredIp').textContent = net.staIp;
+        const hostName = (sys.name || 'craftthingy').toLowerCase().replace(/\s+/g, '-');
+        document.getElementById('discoveredMdns').textContent = `http://${hostName}.local`;
+        document.getElementById('openNewIpLink').href = `http://${net.staIp}`;
+      } else {
+        document.getElementById('valIp').textContent = net.ip || data.ip || "192.168.4.1";
+      }
+
+      if (net.useStatic !== undefined && !document.getElementById('useStaticIp').dataset.userTouched) {
+        document.getElementById('useStaticIp').checked = !!net.useStatic;
+        toggleStaticIpFields();
+        if (net.staticIp) document.getElementById('staticIp').value = net.staticIp;
+        if (net.gateway) document.getElementById('gatewayIp').value = net.gateway;
+        if (net.subnet) document.getElementById('subnetMask').value = net.subnet;
+        if (net.dns) document.getElementById('dns1Ip').value = net.dns;
+      }
+
       document.getElementById('valSeq').textContent = sec.rollingSequence !== undefined ? sec.rollingSequence : (data.rollingSequence || 1);
       document.getElementById('valOta').textContent = ota.status || data.otaStatus || "Idle";
 
@@ -397,17 +468,82 @@
     }
   }
 
+  function toggleStaticIpFields() {
+    const chk = document.getElementById('useStaticIp').checked;
+    document.getElementById('staticIpFields').style.display = chk ? 'block' : 'none';
+    document.getElementById('useStaticIp').dataset.userTouched = "true";
+  }
+
+  function switchToDiscoveredIp() {
+    const ip = document.getElementById('discoveredIp').textContent;
+    if (ip && ip !== '192.168.1.xxx') {
+      document.getElementById('espHost').value = ip;
+      log(`Switched target ESP address to: ${ip}`);
+      fetchStatus();
+    }
+  }
+
+  let discoveryInterval = null;
+  function startLanIpDiscovery(ssid) {
+    if (discoveryInterval) clearInterval(discoveryInterval);
+    let attempts = 0;
+    discoveryInterval = setInterval(async () => {
+      attempts++;
+      try {
+        const json = await apiRequest('GET', '/api/v1/system/status');
+        const data = json.data || json;
+        const net = data.network || {};
+        const staIp = net.staIp || (net.state === 'connected' ? net.ip : null);
+
+        if (net.state === 'connected' && staIp && staIp !== '0.0.0.0' && staIp !== '192.168.4.1') {
+          clearInterval(discoveryInterval);
+          discoveryInterval = null;
+          log(`🎉 ESP Successfully connected to ${ssid}! Dynamic Router IP: ${staIp}`);
+          
+          document.getElementById('lanDiscoveryBanner').style.display = 'block';
+          document.getElementById('discoveredSsid').textContent = ssid;
+          document.getElementById('discoveredIp').textContent = staIp;
+          const hostName = (data.system?.name || 'craftthingy').toLowerCase().replace(/\s+/g, '-');
+          document.getElementById('discoveredMdns').textContent = `http://${hostName}.local`;
+          document.getElementById('openNewIpLink').href = `http://${staIp}`;
+          
+          alert(`🎉 ESP Connected to "${ssid}"!\n\nAssigned IP: ${staIp}\n\nSwitch your PC/phone Wi-Fi to "${ssid}" and access the ESP at:\nhttp://${staIp}`);
+        }
+      } catch (e) {
+        // Still connecting or brief renegotiation
+      }
+      if (attempts > 30) {
+        clearInterval(discoveryInterval);
+        discoveryInterval = null;
+        log("[Timeout] Wi-Fi connection check ended. Check router admin table if IP not yet found.");
+      }
+    }, 1500);
+  }
+
   async function saveWiFi() {
     try {
       const ssid = document.getElementById('wifiSsid').value.trim();
       const pass = document.getElementById('wifiPass').value;
       if (!ssid) { alert("Please enter SSID"); return; }
 
-      log(`Sending WiFi credentials for "${ssid}"...`);
-      await apiRequest('POST', '/api/v1/wifi/config', { ssid, pass });
-      log(`[Success] WiFi credentials sent! ESP is connecting to "${ssid}" in background.`);
-      alert(`✅ WiFi credentials sent!\n\nThe ESP is connecting to "${ssid}" in the background.\nOnce connected, it will receive an IP from your router.`);
-      setTimeout(fetchStatus, 3000);
+      const useStatic = document.getElementById('useStaticIp').checked;
+      const staticIp = document.getElementById('staticIp').value.trim();
+      const gateway = document.getElementById('gatewayIp').value.trim();
+      const subnet = document.getElementById('subnetMask').value.trim();
+      const dns1 = document.getElementById('dns1Ip').value.trim();
+      const dns2 = document.getElementById('dns2Ip').value.trim();
+
+      if (useStatic && !staticIp) {
+        alert("Please enter the Static IP Address or disable Static IP for DHCP.");
+        return;
+      }
+
+      log(`Sending WiFi credentials for "${ssid}" (${useStatic ? 'Static IP: ' + staticIp : 'DHCP Dynamic IP'})...`);
+      const payload = { ssid, pass, useStatic, staticIp, gateway, subnet, dns1, dns2 };
+      await apiRequest('POST', '/api/v1/wifi/config', payload);
+      log(`[Success] Credentials saved! ESP is connecting to "${ssid}" in background...`);
+      log(`[Auto-Detect] Polling ESP for newly assigned network IP...`);
+      startLanIpDiscovery(ssid);
     } catch (e) {
       log(`Error saving WiFi: ${e.message}`);
       alert(`❌ Failed to save WiFi: ${e.message}`);
