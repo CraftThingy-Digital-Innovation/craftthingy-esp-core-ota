@@ -236,31 +236,48 @@
 
   <!-- GitHub OTA Configuration Card -->
   <div class="card">
-    <h2>5. GitHub OTA Targets</h2>
+    <h2>5. GitHub OTA Targets & Application Source</h2>
     <div class="form-group">
-      <label>GitHub Organization</label>
-      <input type="text" id="ghOrg" value="CraftThingy-Digital-Innovation">
-    </div>
-    <div class="form-group">
-      <label>Core OTA Repo</label>
-      <input type="text" id="ghCore" value="craftthingy-esp-core-ota">
-    </div>
-    <div class="form-group">
-      <label>Controller Application Repo</label>
-      <input type="text" id="ghCtrl" value="craftthingy-esp-water-pump">
-    </div>
-    <div class="form-group">
-      <label>Device Role</label>
-      <select id="deviceRole">
-        <option value="water_pump">Water Pump (craftthingy-esp-water-pump)</option>
-        <option value="washing_machine">Washing Machine (craftthingy-esp-washing-machine)</option>
-        <option value="core">Standalone Core Updater</option>
+      <label>Application Preset or Custom Repository</label>
+      <select id="repoPreset" onchange="onRepoPresetChanged()">
+        <option value="water_pump">💧 Official: Water Pump (craftthingy-esp-water-pump)</option>
+        <option value="washing_machine">🧺 Official: Washing Machine (craftthingy-esp-washing-machine)</option>
+        <option value="core">⚙️ Standalone: Pure Core OTA Framework (craftthingy-esp-core-ota)</option>
+        <option value="custom">🛠️ Custom Developer / Community Application</option>
       </select>
     </div>
-    <div class="form-group">
-      <label>GitHub Token (Optional, for private repos)</label>
-      <input type="password" id="ghToken" placeholder="ghp_...">
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div class="form-group">
+        <label>GitHub Org / User</label>
+        <input type="text" id="ghOrg" value="CraftThingy-Digital-Innovation">
+      </div>
+      <div class="form-group">
+        <label>Controller Application Repo</label>
+        <input type="text" id="ghCtrl" value="craftthingy-esp-water-pump">
+      </div>
     </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div class="form-group">
+        <label>Device Role Identifier Tag</label>
+        <input type="text" id="deviceRole" value="water_pump" placeholder="e.g. smart_feeder, hydroponics">
+      </div>
+      <div class="form-group">
+        <label>Core OTA Framework Repo</label>
+        <input type="text" id="ghCore" value="craftthingy-esp-core-ota">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>GitHub Personal Access Token (Optional, for private repositories)</label>
+      <input type="password" id="ghToken" placeholder="ghp_... (Leave blank for public releases)">
+    </div>
+
+    <div style="background:#0b1120; border-left:3px solid var(--accent); padding:10px 14px; border-radius:6px; font-size:0.85rem; color:var(--text-dim); margin-bottom:16px; line-height:1.4;">
+      💡 <strong>Custom Developer Projects:</strong> Anyone can build their own hardware controller on top of CraftThingy Core. Simply enter your GitHub username/organization and repo above. The core automatically matches release assets named <code>{role}-{board}.bin</code> (e.g. <code>smart_feeder-esp01s.bin</code>).
+    </div>
+
     <div class="btn-group">
       <button onclick="saveGitHub()">Save & Ratchet Key</button>
       <button class="secondary" onclick="triggerUpdate()">Check OTA Now</button>
@@ -268,23 +285,72 @@
     </div>
   </div>
 
-  <!-- Live Operation Monitoring & Manual Interruption Card -->
-  <div class="card" style="border-color: #f59e0b;">
-    <h2 style="color: #fbbf24;">6. Live Operation Monitoring & Manual Interruption</h2>
-    <div class="status-grid" style="margin-bottom:16px;">
-      <div class="status-item"><div class="label">Actuator / Relay</div><div class="val" id="ctrlRunning" style="color:#22c55e;">STOPPED</div></div>
-      <div class="status-item"><div class="label">Control Mode</div><div class="val" id="ctrlMode">AUTO</div></div>
-      <div class="status-item"><div class="label">Water Float Sensor</div><div class="val" id="ctrlSensor">IDLE</div></div>
-      <div class="status-item"><div class="label">Run Duration</div><div class="val" id="ctrlDuration">0s</div></div>
+  <!-- Adaptive Live Hardware & Controller Operations Card -->
+  <div class="card" style="border-color: #f59e0b;" id="ctrlCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px;">
+      <h2 style="color: #fbbf24; margin-bottom:0; border:none; padding:0;" id="ctrlCardTitle">6. Hardware Controller Telemetry & Actions</h2>
+      <span id="ctrlRoleBadge" class="badge" style="background:rgba(251,191,36,0.15); color:#fbbf24; font-size:0.8rem;">WATER_PUMP</span>
     </div>
-    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:12px;">
-      Use the buttons below to manually start, resume, or immediately interrupt and cut power to the pump relay:
-    </p>
-    <div class="btn-group">
-      <button class="danger" style="background:#dc2626; color:#fff; font-size:1rem;" onclick="sendControllerCommand('interrupt')">🚨 EMERGENCY STOP / INTERRUPT</button>
-      <button style="background:#16a34a; color:#fff;" onclick="sendControllerCommand('start')">▶️ FORCE PUMP ON</button>
-      <button class="secondary" onclick="sendControllerCommand('auto')">🔄 RESUME AUTO MODE</button>
-      <button class="secondary" onclick="sendControllerCommand('reset_safety')">🛡️ RESET SAFETY ALARM</button>
+
+    <!-- 1. Dedicated Water Pump Section -->
+    <div id="sectionWaterPump">
+      <div class="status-grid" style="margin-bottom:16px;">
+        <div class="status-item"><div class="label">Pump Actuator / Relay</div><div class="val" id="ctrlRunning" style="color:#22c55e;">STOPPED</div></div>
+        <div class="status-item"><div class="label">Control Mode</div><div class="val" id="ctrlMode">AUTO</div></div>
+        <div class="status-item"><div class="label">Water Float Sensor</div><div class="val" id="ctrlSensor">IDLE</div></div>
+        <div class="status-item"><div class="label">Run Duration</div><div class="val" id="ctrlDuration">0s</div></div>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:12px;">
+        Manage pump automation, force relay override, or trigger instant emergency interruption:
+      </p>
+      <div class="btn-group">
+        <button class="danger" style="background:#dc2626; color:#fff; font-size:1rem;" onclick="sendControllerCommand('interrupt')">🚨 EMERGENCY STOP</button>
+        <button style="background:#16a34a; color:#fff;" onclick="sendControllerCommand('start')">▶️ FORCE PUMP ON</button>
+        <button class="secondary" onclick="sendControllerCommand('auto')">🔄 RESUME AUTO</button>
+        <button class="secondary" onclick="sendControllerCommand('reset_safety')">🛡️ RESET ALARM</button>
+      </div>
+    </div>
+
+    <!-- 2. Dedicated Washing Machine Section -->
+    <div id="sectionWashingMachine" style="display:none;">
+      <div class="status-grid" style="margin-bottom:16px;">
+        <div class="status-item"><div class="label">Cycle State</div><div class="val" id="wmState" style="color:var(--accent);">IDLE</div></div>
+        <div class="status-item"><div class="label">Motor / Drum</div><div class="val" id="wmMotor">OFF</div></div>
+        <div class="status-item"><div class="label">Water Inflow Valve</div><div class="val" id="wmValve">CLOSED</div></div>
+        <div class="status-item"><div class="label">Door Safety Lock</div><div class="val" id="wmDoor">LOCKED</div></div>
+      </div>
+      <div class="btn-group">
+        <button style="background:#16a34a; color:#fff;" onclick="sendControllerCommand('start')">▶️ START CYCLE</button>
+        <button class="secondary" onclick="sendControllerCommand('pause')">⏸️ PAUSE</button>
+        <button class="secondary" onclick="sendControllerCommand('drain')">💧 DRAIN</button>
+        <button class="danger" onclick="sendControllerCommand('stop')">🚨 EMERGENCY STOP</button>
+      </div>
+    </div>
+
+    <!-- 3. Standalone Core Section -->
+    <div id="sectionCore" style="display:none; text-align:center; padding:16px 8px;">
+      <div style="font-size:1.05rem; color:var(--accent); font-weight:600; margin-bottom:6px;">⚙️ Standalone Core Framework Active</div>
+      <p style="font-size:0.85rem; color:var(--text-dim); max-width:480px; margin:0 auto 12px auto;">
+        No physical appliance controller is attached to this board. It is running in base OTA mode, ready to be switched to any controller application via GitHub OTA above.
+      </p>
+    </div>
+
+    <!-- 4. Dynamic Generic / Custom Controller Section -->
+    <div id="sectionCustom" style="display:none;">
+      <div id="customTelemetryGrid" class="status-grid" style="margin-bottom:16px;"></div>
+      <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:10px;">
+        Interactive Command Dispatcher (Dispatches to controller <code>handleCommand()</code>):
+      </p>
+      <div class="btn-group" style="margin-bottom:12px;">
+        <button class="secondary" onclick="sendControllerCommand('start')">Start</button>
+        <button class="secondary" onclick="sendControllerCommand('stop')">Stop</button>
+        <button class="secondary" onclick="sendControllerCommand('reset')">Reset</button>
+        <button class="secondary" onclick="sendControllerCommand('status')">Status</button>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="customCmdInput" placeholder="Enter custom command (e.g. trigger, calibrate, toggle_led)">
+        <button style="flex:0 0 140px;" onclick="sendCustomCommand()">Send Command</button>
+      </div>
     </div>
   </div>
 
@@ -409,24 +475,103 @@
       document.getElementById('valSeq').textContent = sec.rollingSequence !== undefined ? sec.rollingSequence : (data.rollingSequence || 1);
       document.getElementById('valOta').textContent = ota.status || data.otaStatus || "Idle";
 
-      // Controller telemetry
-      if (ctrl) {
-        const isRunning = ctrl.pumpRunning || ctrl.motorActive;
-        const runningEl = document.getElementById('ctrlRunning');
-        runningEl.textContent = isRunning ? "RUNNING" : "STOPPED";
-        runningEl.style.color = isRunning ? "#22c55e" : "#94a3b8";
+      // Sync OTA target inputs if user hasn't modified them
+      if (ota.org && !document.getElementById('ghOrg').dataset.userTouched) document.getElementById('ghOrg').value = ota.org;
+      if (ota.coreRepo && !document.getElementById('ghCore').dataset.userTouched) document.getElementById('ghCore').value = ota.coreRepo;
+      if (ota.controllerRepo !== undefined && !document.getElementById('ghCtrl').dataset.userTouched) document.getElementById('ghCtrl').value = ota.controllerRepo;
+      if (ota.activeRole && !document.getElementById('deviceRole').dataset.userTouched) document.getElementById('deviceRole').value = ota.activeRole;
 
-        let modeText = "AUTO";
-        if (ctrl.interrupted) modeText = "INTERRUPTED (STOPPED)";
-        else if (!ctrl.autoMode) modeText = "MANUAL";
-        if (ctrl.dryRunAlarm) modeText += " [SAFETY TRIPPED]";
-        document.getElementById('ctrlMode').textContent = modeText;
-
-        if (ctrl.tankDemandsFill !== undefined) {
-          document.getElementById('ctrlSensor').textContent = ctrl.tankDemandsFill ? "LOW (FILL REQUIRED)" : "FULL / NORMAL";
+      // Sync preset dropdown
+      const currentCtrl = ota.controllerRepo || '';
+      const currentRole = ota.activeRole || 'water_pump';
+      const presetSelect = document.getElementById('repoPreset');
+      if (!presetSelect.dataset.userTouched) {
+        if (currentRole === 'water_pump' && currentCtrl === 'craftthingy-esp-water-pump') {
+          presetSelect.value = 'water_pump';
+        } else if (currentRole === 'washing_machine' && currentCtrl === 'craftthingy-esp-washing-machine') {
+          presetSelect.value = 'washing_machine';
+        } else if (currentRole === 'core' || !currentCtrl) {
+          presetSelect.value = 'core';
+        } else {
+          presetSelect.value = 'custom';
         }
-        if (ctrl.runDurationSec !== undefined) {
-          document.getElementById('ctrlDuration').textContent = `${ctrl.runDurationSec}s`;
+      }
+
+      // Adaptive Controller UI Switching
+      const roleBadge = document.getElementById('ctrlRoleBadge');
+      const secWater = document.getElementById('sectionWaterPump');
+      const secWash = document.getElementById('sectionWashingMachine');
+      const secCore = document.getElementById('sectionCore');
+      const secCustom = document.getElementById('sectionCustom');
+
+      roleBadge.textContent = currentRole.toUpperCase();
+
+      if (currentRole === 'water_pump') {
+        secWater.style.display = 'block';
+        secWash.style.display = 'none';
+        secCore.style.display = 'none';
+        secCustom.style.display = 'none';
+
+        if (ctrl) {
+          const isRunning = ctrl.pumpRunning || ctrl.motorActive;
+          const runningEl = document.getElementById('ctrlRunning');
+          runningEl.textContent = isRunning ? "RUNNING" : "STOPPED";
+          runningEl.style.color = isRunning ? "#22c55e" : "#94a3b8";
+
+          let modeText = "AUTO";
+          if (ctrl.interrupted) modeText = "INTERRUPTED (STOPPED)";
+          else if (!ctrl.autoMode) modeText = "MANUAL";
+          if (ctrl.dryRunAlarm) modeText += " [SAFETY TRIPPED]";
+          document.getElementById('ctrlMode').textContent = modeText;
+
+          if (ctrl.tankDemandsFill !== undefined) {
+            document.getElementById('ctrlSensor').textContent = ctrl.tankDemandsFill ? "LOW (FILL REQUIRED)" : "FULL / NORMAL";
+          }
+          if (ctrl.runDurationSec !== undefined) {
+            document.getElementById('ctrlDuration').textContent = `${ctrl.runDurationSec}s`;
+          }
+        }
+      } else if (currentRole === 'washing_machine') {
+        secWater.style.display = 'none';
+        secWash.style.display = 'block';
+        secCore.style.display = 'none';
+        secCustom.style.display = 'none';
+
+        if (ctrl) {
+          document.getElementById('wmState').textContent = ctrl.cycleState || "IDLE";
+          document.getElementById('wmMotor').textContent = ctrl.motorActive ? `ACTIVE (${ctrl.drumRpm || 0} RPM)` : "OFF";
+          document.getElementById('wmValve').textContent = ctrl.waterValveOpen ? "OPEN" : "CLOSED";
+          document.getElementById('wmDoor').textContent = ctrl.doorLocked ? "LOCKED" : "UNLOCKED";
+        }
+      } else if (currentRole === 'core' || currentRole === 'none' || !ctrl) {
+        secWater.style.display = 'none';
+        secWash.style.display = 'none';
+        secCore.style.display = 'block';
+        secCustom.style.display = 'none';
+      } else {
+        // Any Custom / Third-Party Developer Controller
+        secWater.style.display = 'none';
+        secWash.style.display = 'none';
+        secCore.style.display = 'none';
+        secCustom.style.display = 'block';
+
+        const customGrid = document.getElementById('customTelemetryGrid');
+        customGrid.innerHTML = '';
+        if (ctrl && typeof ctrl === 'object') {
+          for (const [k, v] of Object.entries(ctrl)) {
+            const item = document.createElement('div');
+            item.className = 'status-item';
+            const lbl = document.createElement('div');
+            lbl.className = 'label';
+            lbl.textContent = k.replace(/([A-Z])/g, ' $1');
+            const val = document.createElement('div');
+            val.className = 'val';
+            val.textContent = typeof v === 'boolean' ? (v ? 'TRUE' : 'FALSE') : (typeof v === 'object' ? JSON.stringify(v) : v);
+            if (typeof v === 'boolean' && v) val.style.color = '#22c55e';
+            item.appendChild(lbl);
+            item.appendChild(val);
+            customGrid.appendChild(item);
+          }
         }
       }
 
@@ -434,6 +579,43 @@
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
     }
+  }
+
+  function onRepoPresetChanged() {
+    const preset = document.getElementById('repoPreset').value;
+    const org = document.getElementById('ghOrg');
+    const ctrl = document.getElementById('ghCtrl');
+    const role = document.getElementById('deviceRole');
+    const core = document.getElementById('ghCore');
+
+    document.getElementById('repoPreset').dataset.userTouched = "true";
+    org.dataset.userTouched = "true";
+    ctrl.dataset.userTouched = "true";
+    role.dataset.userTouched = "true";
+
+    if (preset === 'water_pump') {
+      org.value = 'CraftThingy-Digital-Innovation';
+      core.value = 'craftthingy-esp-core-ota';
+      ctrl.value = 'craftthingy-esp-water-pump';
+      role.value = 'water_pump';
+    } else if (preset === 'washing_machine') {
+      org.value = 'CraftThingy-Digital-Innovation';
+      core.value = 'craftthingy-esp-core-ota';
+      ctrl.value = 'craftthingy-esp-washing-machine';
+      role.value = 'washing_machine';
+    } else if (preset === 'core') {
+      org.value = 'CraftThingy-Digital-Innovation';
+      core.value = 'craftthingy-esp-core-ota';
+      ctrl.value = '';
+      role.value = 'core';
+    }
+  }
+
+  function sendCustomCommand() {
+    const cmd = document.getElementById('customCmdInput').value.trim();
+    if (!cmd) { alert("Please enter a command"); return; }
+    sendControllerCommand(cmd);
+    document.getElementById('customCmdInput').value = '';
   }
 
   async function sendControllerCommand(cmd) {
