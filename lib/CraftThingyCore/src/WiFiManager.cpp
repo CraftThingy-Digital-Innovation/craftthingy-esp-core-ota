@@ -290,8 +290,13 @@ void WiFiManager::configureAP(const String& ssid, const String& password) {
         _apSSID = "CraftThingy-" + suffix;
     }
 
-    if (_state == WIFI_STATE_AP_PORTAL || _state == WIFI_STATE_CONNECTING) {
-        const char* apPass = (password.length() >= 8) ? password.c_str() : nullptr;
+    DeviceConfig& cfg = ConfigStore::get();
+    const char* apPass = (password.length() >= 8) ? password.c_str() : 
+                         (strlen(cfg.apPassword) >= 8 ? cfg.apPassword : nullptr);
+
+    // Apply immediately to the live radio beacon if SoftAP is broadcasting or in AP mode
+    WiFiMode_t currentMode = WiFi.getMode();
+    if ((currentMode & WIFI_AP) || _state == WIFI_STATE_AP_PORTAL || _state == WIFI_STATE_CONNECTING) {
         WiFi.softAP(_apSSID.c_str(), apPass, CRAFT_AP_CHANNEL);
     }
 }

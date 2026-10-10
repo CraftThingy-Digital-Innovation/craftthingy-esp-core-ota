@@ -39,7 +39,7 @@
 // =================================================================
 // Default Configuration Constants
 // =================================================================
-#define CRAFT_CORE_VERSION          "1.0.0"
+#define CRAFT_CORE_VERSION          "1.0.1"
 #define CRAFT_DEFAULT_ORG           "CraftThingy-Digital-Innovation"
 #define CRAFT_DEFAULT_CORE_REPO     "craftthingy-esp-core-ota"
 
@@ -51,7 +51,7 @@
     #define CRAFT_DEFAULT_ROLE          "core"
 #endif
 
-// Networking & Failover Defaults
+// Networking & Failover Default
 #define CRAFT_WIFI_MAX_RETRIES      5
 #define CRAFT_WIFI_RETRY_DELAY_MS   1500
 #define CRAFT_AP_CHANNEL            1
