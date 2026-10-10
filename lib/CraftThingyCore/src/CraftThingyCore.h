@@ -8,6 +8,7 @@
 #include "WiFiManager.h"
 #include "GitHubUpdater.h"
 #include "RestApi.h"
+#include "PinManager.h"
 #include "DeviceController.h"
 
 class CraftThingyCoreClass {

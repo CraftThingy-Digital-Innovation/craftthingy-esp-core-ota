@@ -3,6 +3,14 @@
 #include <Arduino.h>
 #include "CraftThingyConfig.h"
 
+#define CRAFT_MAX_PIN_ROLES 8
+
+struct PinRoleEntry {
+    char   role[12];     // Logical name: e.g. "relay", "sensor", "btn1", "i2c_sda"
+    int8_t gpio;         // Configured GPIO pin (-1 = unassigned / use default)
+    uint8_t flags;       // Bitmask: 0x01 = inverted (active-low), 0x02 = input-pullup
+};
+
 struct DeviceConfig {
     char wifiSsid[33];
     char wifiPassword[65];
@@ -26,8 +34,9 @@ struct DeviceConfig {
     char wifiSubnet[16];
     char wifiDns1[16];
     char wifiDns2[16];
-    int8_t gpioRelay;   // Configured Relay GPIO pin (-1 = board default)
-    int8_t gpioSensor;  // Configured Float Sensor GPIO pin (-1 = board default)
+    int8_t gpioRelay;   // Backwards-compatible legacy relay pin (-1 = board default)
+    int8_t gpioSensor;  // Backwards-compatible legacy sensor pin (-1 = board default)
+    PinRoleEntry pinRoles[CRAFT_MAX_PIN_ROLES]; // Global persistent pin roles across all modules
 };
 
 class ConfigStore {
@@ -61,7 +70,12 @@ public:
                               const String& dns1 = "",
                               const String& dns2 = "");
 
-    // Update Hardware GPIO pin assignments (persisted across OTA updates)
+    // Global Hardware GPIO pin role mapping (persisted across OTA updates)
+    static int8_t getPin(const char* role, int8_t defaultGpio = -1);
+    static bool setPin(const char* role, int8_t gpio, uint8_t flags = 0);
+    static const PinRoleEntry* getPinRoles();
+
+    // Backwards-compatible pin setter
     static bool setPinConfig(int8_t relayPin, int8_t sensorPin);
 
     // Update Active Role

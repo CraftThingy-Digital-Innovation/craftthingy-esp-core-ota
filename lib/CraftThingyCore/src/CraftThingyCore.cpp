@@ -17,6 +17,9 @@ void CraftThingyCoreClass::begin(IDeviceController* activeController) {
     ConfigStore::init();
     DeviceConfig& cfg = ConfigStore::get();
 
+    // 3.5. Initialize Global PinManager
+    PinManager::init();
+
     // 4. Initialize WiFi state machine & SoftAP fallback
     WiFiManager::init();
 

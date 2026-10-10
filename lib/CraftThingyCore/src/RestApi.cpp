@@ -6,6 +6,7 @@
 #include "CraftThingyCrypto.h"
 #include "CraftThingyCore.h"
 #include "CaptivePortalHtml.h"
+#include "PinManager.h"
 
 ApiServerType RestApi::_server(CRAFT_WEB_PORT);
 
@@ -124,7 +125,8 @@ bool RestApi::isRequestAuthorized(ApiServerType& server, String& outMethod) {
     if (WiFiManager::isAPMode()) {
         String uri = server.uri();
         if (uri == "/" || uri == "/setup" || uri.startsWith("/api/v1/wifi/") || 
-            uri == "/api/v1/system/status" || uri == "/api/v1/system/name" || uri == "/api/v1/device/name") {
+            uri == "/api/v1/system/status" || uri == "/api/v1/system/name" || uri == "/api/v1/device/name" ||
+            uri == "/api/v1/hardware/pins" || uri == "/api/hardware/pins") {
             outMethod = "ap_portal_local";
             return true;
         }
@@ -156,6 +158,10 @@ void RestApi::setupRoutes() {
     _server.on("/api/v1/device/command", HTTP_POST, handleControllerCommand);
     _server.on("/api/v1/pump/status", HTTP_GET, handleControllerStatus);
     _server.on("/api/v1/pump/command", HTTP_POST, handleControllerCommand);
+
+    // Hardware Pin Mapping (Global, Board-Agnostic, and Persistent)
+    _server.on("/api/v1/hardware/pins", HTTP_GET, handleGetHardwarePins);
+    _server.on("/api/v1/hardware/pins", HTTP_POST, handleSetHardwarePins);
 
     // System Telemetry & Maintenance
     _server.on("/api/v1/system/status", HTTP_GET, handleStatus);
@@ -196,6 +202,8 @@ void RestApi::setupRoutes() {
     _server.on("/api/reboot", HTTP_POST, handleReboot);
     _server.on("/api/controller/status", HTTP_GET, handleControllerStatus);
     _server.on("/api/controller/command", HTTP_POST, handleControllerCommand);
+    _server.on("/api/hardware/pins", HTTP_GET, handleGetHardwarePins);
+    _server.on("/api/hardware/pins", HTTP_POST, handleSetHardwarePins);
 
     // Pre-flight CORS and fallback 404
     _server.onNotFound(handleNotFound);
@@ -898,6 +906,39 @@ void RestApi::handleSetupPost() {
     sendStandardSuccess("Configuration saved! ESP connecting to: " + ssid);
 
     WiFiManager::connectSTA(ssid.c_str(), pass.c_str(), CRAFT_WIFI_MAX_RETRIES);
+}
+
+void RestApi::handleGetHardwarePins() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    sendStandardResponse(200, PinManager::getHardwarePinsJson());
+}
+
+void RestApi::handleSetHardwarePins() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    String body = _server.arg("plain");
+    String err;
+    if (!PinManager::applyPinsFromJson(body, err)) {
+        sendStandardError(400, "Failed to apply hardware pins: " + err);
+        return;
+    }
+
+    // Notify active controller to reinitialize pins immediately
+    IDeviceController* ctrl = CraftThingyCore.getController();
+    if (ctrl != nullptr) {
+        ctrl->setup();
+    }
+
+    sendStandardResponse(200, "{\"message\":\"Hardware pins successfully updated and persisted across OTA updates\",\"pins\":" + PinManager::getHardwarePinsJson() + "}");
 }
 
 void RestApi::handleNotFound() {

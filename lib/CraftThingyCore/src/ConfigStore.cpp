@@ -49,6 +49,11 @@ void ConfigStore::populateDefaults() {
     strncpy(_config.wifiDns2, "1.1.1.1", sizeof(_config.wifiDns2) - 1);
     _config.gpioRelay = -1;  // -1 = use board hardware default
     _config.gpioSensor = -1; // -1 = use board hardware default
+    for (size_t i = 0; i < CRAFT_MAX_PIN_ROLES; ++i) {
+        memset(_config.pinRoles[i].role, 0, sizeof(_config.pinRoles[i].role));
+        _config.pinRoles[i].gpio = -1;
+        _config.pinRoles[i].flags = 0;
+    }
 }
 
 bool ConfigStore::init() {
@@ -129,6 +134,9 @@ bool ConfigStore::load() {
     strncpy(_config.deviceName, devName.c_str(), sizeof(_config.deviceName) - 1);
     strncpy(_config.apSsid, apSsid.c_str(), sizeof(_config.apSsid) - 1);
     strncpy(_config.apPassword, apPass.c_str(), sizeof(_config.apPassword) - 1);
+    if (prefs.isKey("pin_roles")) {
+        prefs.getBytes("pin_roles", _config.pinRoles, sizeof(_config.pinRoles));
+    }
 
     return true;
 #endif
@@ -171,6 +179,7 @@ bool ConfigStore::save() {
     prefs.putString("name", _config.deviceName);
     prefs.putString("ap_ssid", _config.apSsid);
     prefs.putString("ap_pass", _config.apPassword);
+    prefs.putBytes("pin_roles", _config.pinRoles, sizeof(_config.pinRoles));
     prefs.end();
     return true;
 #endif
@@ -275,7 +284,65 @@ bool ConfigStore::setAPConfig(const String& ssid, const String& pass) {
     return save();
 }
 
+int8_t ConfigStore::getPin(const char* role, int8_t defaultGpio) {
+    if (!role || strlen(role) == 0) return defaultGpio;
+
+    for (size_t i = 0; i < CRAFT_MAX_PIN_ROLES; ++i) {
+        if (_config.pinRoles[i].role[0] != '\0' && strcmp(_config.pinRoles[i].role, role) == 0) {
+            return (_config.pinRoles[i].gpio >= 0) ? _config.pinRoles[i].gpio : defaultGpio;
+        }
+    }
+
+    // Fallback check for legacy fields
+    if (strcmp(role, "relay") == 0 && _config.gpioRelay >= 0) {
+        return _config.gpioRelay;
+    }
+    if (strcmp(role, "sensor") == 0 && _config.gpioSensor >= 0) {
+        return _config.gpioSensor;
+    }
+
+    return defaultGpio;
+}
+
+bool ConfigStore::setPin(const char* role, int8_t gpio, uint8_t flags) {
+    if (!role || strlen(role) == 0) return false;
+
+    // Check if role already exists in slot
+    int emptySlot = -1;
+    for (size_t i = 0; i < CRAFT_MAX_PIN_ROLES; ++i) {
+        if (_config.pinRoles[i].role[0] != '\0' && strcmp(_config.pinRoles[i].role, role) == 0) {
+            _config.pinRoles[i].gpio = gpio;
+            _config.pinRoles[i].flags = flags;
+            if (strcmp(role, "relay") == 0) _config.gpioRelay = gpio;
+            if (strcmp(role, "sensor") == 0) _config.gpioSensor = gpio;
+            return save();
+        }
+        if (_config.pinRoles[i].role[0] == '\0' && emptySlot == -1) {
+            emptySlot = i;
+        }
+    }
+
+    // Use first empty slot
+    if (emptySlot != -1) {
+        strncpy(_config.pinRoles[emptySlot].role, role, sizeof(_config.pinRoles[emptySlot].role) - 1);
+        _config.pinRoles[emptySlot].role[sizeof(_config.pinRoles[emptySlot].role) - 1] = '\0';
+        _config.pinRoles[emptySlot].gpio = gpio;
+        _config.pinRoles[emptySlot].flags = flags;
+        if (strcmp(role, "relay") == 0) _config.gpioRelay = gpio;
+        if (strcmp(role, "sensor") == 0) _config.gpioSensor = gpio;
+        return save();
+    }
+
+    return false;
+}
+
+const PinRoleEntry* ConfigStore::getPinRoles() {
+    return _config.pinRoles;
+}
+
 bool ConfigStore::setPinConfig(int8_t relayPin, int8_t sensorPin) {
+    setPin("relay", relayPin);
+    setPin("sensor", sensorPin);
     _config.gpioRelay = relayPin;
     _config.gpioSensor = sensorPin;
     return save();

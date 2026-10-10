@@ -46,5 +46,7 @@ private:
     static void handleSetAPConfig();
     static void handleControllerStatus();
     static void handleControllerCommand();
+    static void handleGetHardwarePins();
+    static void handleSetHardwarePins();
     static void handleNotFound();
 };

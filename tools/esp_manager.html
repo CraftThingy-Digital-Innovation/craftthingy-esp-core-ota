@@ -394,10 +394,34 @@
     </div>
   </div>
 
+  <!-- Global Hardware Pin Mapping Card -->
+  <div class="card" id="pinConfigCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px;">
+      <h2 style="color:var(--accent); margin-bottom:0; border:none; padding:0;">6. Hardware Pin Mapping & Board Layout</h2>
+      <span id="pinBoardBadge" class="badge" style="background:rgba(56,189,248,0.15); color:var(--accent); font-size:0.8rem;">DETECTING...</span>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:14px; line-height:1.4;">
+      Configure physical GPIO pins for the active firmware module. Settings are saved in persistent EEPROM/NVS and <strong>never reset when updating firmware via OTA</strong>.
+    </p>
+
+    <!-- Dynamic Roles Container populated by GET /api/v1/hardware/pins -->
+    <div id="dynamicPinRolesContainer" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px;">
+      <div style="color:var(--text-dim); font-size:0.85rem; grid-column:span 2;">Connect and click 'Refresh Status' to load hardware pins...</div>
+    </div>
+
+    <!-- Active Pin Warning Box (Alerts if strapping or serial pins are selected) -->
+    <div id="pinWarningBox" style="display:none; background:#451a03; border:1px solid #f59e0b; border-left:4px solid #fbbf24; border-radius:6px; padding:10px 14px; font-size:0.82rem; color:#fef3c7; margin-bottom:14px; line-height:1.4;"></div>
+
+    <div class="btn-group">
+      <button style="background:var(--accent); color:#000;" onclick="saveDynamicPins()">💾 Save & Persist Pin Mapping</button>
+      <button class="secondary" onclick="fetchHardwarePins()">🔄 Refresh Pin Layout</button>
+    </div>
+  </div>
+
   <!-- Adaptive Live Hardware & Controller Operations Card -->
   <div class="card" style="border-color: #f59e0b;" id="ctrlCard">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px;">
-      <h2 style="color: #fbbf24; margin-bottom:0; border:none; padding:0;" id="ctrlCardTitle">6. Hardware Controller Telemetry & Actions</h2>
+      <h2 style="color: #fbbf24; margin-bottom:0; border:none; padding:0;" id="ctrlCardTitle">7. Hardware Controller Telemetry & Actions</h2>
       <span id="ctrlRoleBadge" class="badge" style="background:rgba(251,191,36,0.15); color:#fbbf24; font-size:0.8rem;">WATER_PUMP</span>
     </div>
 
@@ -409,6 +433,7 @@
         <div class="status-item"><div class="label">Water Float Sensor</div><div class="val" id="ctrlSensor">IDLE</div></div>
         <div class="status-item"><div class="label">Run Duration</div><div class="val" id="ctrlDuration">0s</div></div>
       </div>
+
       <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:12px;">
         Manage pump automation, force relay override, or trigger instant emergency interruption:
       </p>
@@ -737,6 +762,9 @@
         }
       }
 
+      // Automatically fetch dynamic hardware pin definitions
+      fetchHardwarePins();
+
       log(`Status updated successfully. ESP IP: ${net.ip || data.ip || '192.168.4.1'}`);
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
@@ -749,6 +777,139 @@
       }
       showToast('error', 'Connection Failed', `Could not reach ESP at ${host}. If connected to Wi-Fi, try 192.168.2.228`, 5000);
     }
+  }
+
+  // -----------------------------------------------------------------
+  // Global Hardware Pin Mapping & Board Layout Management
+  // -----------------------------------------------------------------
+  let cachedHardwarePins = null;
+
+  async function fetchHardwarePins() {
+    try {
+      const res = await apiRequest('GET', '/api/v1/hardware/pins');
+      const data = res.data || res;
+      cachedHardwarePins = data;
+      renderHardwarePins(data);
+    } catch (e) {
+      log(`[Pin Manager] Hardware pins not yet loaded: ${e.message}`);
+    }
+  }
+
+  function renderHardwarePins(data) {
+    if (!data) return;
+    const badge = document.getElementById('pinBoardBadge');
+    if (badge) badge.textContent = `${data.chip || 'ESP'} (${data.boardTarget || 'generic'})`;
+
+    const container = document.getElementById('dynamicPinRolesContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const availablePins = data.availablePins || [];
+    const roles = data.roles || [];
+
+    if (roles.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-dim); font-size:0.85rem; grid-column:span 2;">No configurable pin roles registered by this firmware module.</div>';
+      return;
+    }
+
+    roles.forEach(r => {
+      const wrapper = document.createElement('div');
+      const label = document.createElement('label');
+      label.style.fontSize = '0.82rem';
+      label.style.fontWeight = '600';
+      label.textContent = r.label || r.role;
+      wrapper.appendChild(label);
+
+      const select = document.createElement('select');
+      select.id = `rolePin_${r.role}`;
+      select.dataset.role = r.role;
+      select.onchange = checkPinWarnings;
+
+      availablePins.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.gpio;
+        let optText = `${p.name} (GPIO ${p.gpio})`;
+        if (p.capabilities & 0x04) optText += ' ⚠️ [Boot Strapping]';
+        if (p.capabilities & 0x10) optText += ' ℹ️ [Serial UART]';
+        if (p.capabilities & 0x08) optText += ' [Input Only]';
+        opt.textContent = optText;
+
+        // If role requires OUTPUT and pin is INPUT_ONLY, disable
+        if ((r.requiredCaps & 0x02) && (p.capabilities & 0x08)) {
+          opt.disabled = true;
+          opt.textContent += ' (Not Output Capable)';
+        }
+
+        if (p.gpio === r.gpio) {
+          opt.selected = true;
+        }
+        select.appendChild(opt);
+      });
+
+      wrapper.appendChild(select);
+      container.appendChild(wrapper);
+    });
+
+    checkPinWarnings();
+  }
+
+  function checkPinWarnings() {
+    if (!cachedHardwarePins) return;
+    const warnBox = document.getElementById('pinWarningBox');
+    if (!warnBox) return;
+
+    const availablePins = cachedHardwarePins.availablePins || [];
+    const roles = cachedHardwarePins.roles || [];
+    let warnings = [];
+
+    roles.forEach(r => {
+      const select = document.getElementById(`rolePin_${r.role}`);
+      if (!select) return;
+      const chosenGpio = parseInt(select.value, 10);
+      const pinObj = availablePins.find(p => p.gpio === chosenGpio);
+      if (pinObj && pinObj.warning && pinObj.warning.length > 0) {
+        warnings.push(`<strong>${r.label || r.role}</strong> on <code>${pinObj.name}</code>: ${pinObj.warning}`);
+      }
+    });
+
+    if (warnings.length > 0) {
+      warnBox.innerHTML = `⚠️ <strong>Hardware Layout Notices:</strong><br>` + warnings.join('<br>');
+      warnBox.style.display = 'block';
+    } else {
+      warnBox.style.display = 'none';
+    }
+  }
+
+  async function saveDynamicPins() {
+    if (!cachedHardwarePins || !cachedHardwarePins.roles) return;
+    const rolesPayload = [];
+    const roles = cachedHardwarePins.roles;
+
+    for (const r of roles) {
+      const select = document.getElementById(`rolePin_${r.role}`);
+      if (select) {
+        rolesPayload.push({
+          role: r.role,
+          gpio: parseInt(select.value, 10)
+        });
+      }
+    }
+
+    try {
+      const res = await apiRequest('POST', '/api/v1/hardware/pins', { roles: rolesPayload });
+      log("Hardware pin mapping successfully updated and saved in EEPROM!");
+      showToast('success', 'Pins Saved', 'Hardware pins updated in EEPROM and preserved across OTA updates.');
+      fetchHardwarePins();
+      setTimeout(fetchStatus, 500);
+    } catch (e) {
+      log(`Error saving hardware pins: ${e.message}`);
+      showToast('error', 'Pin Error', e.message);
+    }
+  }
+
+  // Backwards-compatible alias for any legacy callers
+  async function saveHardwarePins() {
+    await saveDynamicPins();
   }
 
   function onRepoPresetChanged() {
@@ -778,6 +939,26 @@
       core.value = 'craftthingy-esp-core-ota';
       ctrl.value = '';
       role.value = 'core';
+    }
+  }
+
+  async function saveHardwarePins() {
+    const relay = parseInt(document.getElementById('pinRelay').value);
+    const sensor = parseInt(document.getElementById('pinSensor').value);
+    if (isNaN(relay) || isNaN(sensor)) {
+      alert("Please enter valid GPIO pin numbers.");
+      return;
+    }
+    try {
+      log(`Saving hardware pins: Relay=GPIO${relay}, Float Sensor=GPIO${sensor}...`);
+      await apiRequest('POST', '/api/v1/device/command', { cmd: 'set_pins', payload: `${relay} ${sensor}` });
+      showToast('success', 'Hardware Pins Saved', `Relay: GPIO${relay}, Sensor: GPIO${sensor} (Saved to EEPROM, persists across OTA)`, 5000);
+      document.getElementById('pinRelay').dataset.userTouched = "true";
+      document.getElementById('pinSensor').dataset.userTouched = "true";
+      setTimeout(fetchStatus, 400);
+    } catch(e) {
+      log(`Error saving pins: ${e.message}`);
+      showToast('error', 'Pin Save Failed', e.message);
     }
   }
 
