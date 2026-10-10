@@ -27,7 +27,8 @@ void RestApi::loop() {
 
 void RestApi::sendStandardResponse(int httpCode, const String& dataJson) {
     _server.sendHeader("Access-Control-Allow-Origin", "*");
-    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization");
+    _server.sendHeader("Access-Control-Allow-Private-Network", "true");
+    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization, X-Master-Key");
 
     String envelope = "{";
     envelope += "\"status\":\"success\",";
@@ -41,7 +42,8 @@ void RestApi::sendStandardResponse(int httpCode, const String& dataJson) {
 
 void RestApi::sendStandardError(int httpCode, const String& message, const String& reason) {
     _server.sendHeader("Access-Control-Allow-Origin", "*");
-    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization");
+    _server.sendHeader("Access-Control-Allow-Private-Network", "true");
+    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization, X-Master-Key");
 
     String envelope = "{";
     envelope += "\"status\":\"error\",";
@@ -823,8 +825,9 @@ void RestApi::handleSetupPost() {
 void RestApi::handleNotFound() {
     if (_server.method() == HTTP_OPTIONS) {
         _server.sendHeader("Access-Control-Allow-Origin", "*");
+        _server.sendHeader("Access-Control-Allow-Private-Network", "true");
         _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization");
+        _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization, X-Master-Key");
         _server.send(204);
         return;
     }
