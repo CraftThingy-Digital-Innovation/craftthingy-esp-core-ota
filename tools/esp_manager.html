@@ -94,7 +94,14 @@
   <header>
     <h1>CraftThingy ESP Manager</h1>
     <p>Zero-Install Browser Config & HMAC-SHA256 Rolling Key Controller</p>
-  </header>
+  <!-- Network Connection Guide Banner -->
+  <div style="background:#1e293b; border:1px solid #0284c7; border-left:4px solid #38bdf8; border-radius:8px; padding:12px 16px; margin-bottom:20px; font-size:0.9rem; line-height:1.5;">
+    <strong style="color:#38bdf8;">📡 Connection Guide:</strong>
+    <div style="color:#94a3b8; margin-top:4px;">
+      • If the device is in setup mode, connect your computer's Wi-Fi to <strong>CraftThingy-5371</strong> (Default IP: <code>192.168.4.1</code>).<br>
+      • If the device is already on your home Wi-Fi, change the address above to its local home IP (e.g. <code>192.168.1.xxx</code>).
+    </div>
+  </div>
 
   <!-- Connection & Key Card -->
   <div class="card">
@@ -117,11 +124,13 @@
   <div class="card">
     <h2>2. Live Device Status</h2>
     <div class="status-grid" id="statusGrid">
+      <div class="status-item"><div class="label">Device Name</div><div class="val" id="valName" style="color:var(--accent);">--</div></div>
       <div class="status-item"><div class="label">Chip Target</div><div class="val" id="valChip">--</div></div>
       <div class="status-item"><div class="label">Flash Size</div><div class="val" id="valFlash">--</div></div>
       <div class="status-item"><div class="label">Core Version</div><div class="val" id="valCoreVer">--</div></div>
       <div class="status-item"><div class="label">Active Role</div><div class="val" id="valRole">--</div></div>
       <div class="status-item"><div class="label">WiFi Status</div><div class="val" id="valWifi">--</div></div>
+      <div class="status-item"><div class="label">Fallback Hotspot</div><div class="val" id="valApSsid">--</div></div>
       <div class="status-item"><div class="label">IP Address</div><div class="val" id="valIp">--</div></div>
       <div class="status-item"><div class="label">Rolling Sequence</div><div class="val" id="valSeq">--</div></div>
       <div class="status-item"><div class="label">OTA Status</div><div class="val" id="valOta">--</div></div>
@@ -153,9 +162,31 @@
     </div>
   </div>
 
+  <!-- Device Identity & Fallback Hotspot Card -->
+  <div class="card">
+    <h2>4. Device Identity & Fallback Hotspot</h2>
+    <div class="form-group">
+      <label>Internal Device Name (Independent of Wi-Fi Hotspot)</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="devNameInput" placeholder="e.g. Water Pump Ground Floor">
+        <button style="flex:0 0 130px;" onclick="saveDeviceName()">Save Name</button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label>Fallback Wi-Fi Hotspot SSID & Password (WPA2)</label>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <input type="text" id="apSsidInput" placeholder="Hotspot SSID (e.g. CraftThingy-5371)">
+        <input type="password" id="apPassInput" placeholder="WPA2 Password (min 8 chars, or empty for open)">
+      </div>
+      <div class="btn-group" style="margin-top:10px;">
+        <button class="secondary" onclick="saveAPConfig()">Save Hotspot Settings</button>
+      </div>
+    </div>
+  </div>
+
   <!-- GitHub OTA Configuration Card -->
   <div class="card">
-    <h2>4. GitHub OTA Targets</h2>
+    <h2>5. GitHub OTA Targets</h2>
     <div class="form-group">
       <label>GitHub Organization</label>
       <input type="text" id="ghOrg" value="CraftThingy-Digital-Innovation">
@@ -189,7 +220,7 @@
 
   <!-- Live Operation Monitoring & Manual Interruption Card -->
   <div class="card" style="border-color: #f59e0b;">
-    <h2 style="color: #fbbf24;">5. Live Operation Monitoring & Manual Interruption</h2>
+    <h2 style="color: #fbbf24;">6. Live Operation Monitoring & Manual Interruption</h2>
     <div class="status-grid" style="margin-bottom:16px;">
       <div class="status-item"><div class="label">Actuator / Relay</div><div class="val" id="ctrlRunning" style="color:#22c55e;">STOPPED</div></div>
       <div class="status-item"><div class="label">Control Mode</div><div class="val" id="ctrlMode">AUTO</div></div>
@@ -259,7 +290,7 @@
       'X-Signature': signature,
       'X-Timestamp': timestamp,
       'X-Nonce': nonce,
-      'X-Sequence': rollingSeq.toString(),
+      'X-Sequence': '0',
       'Authorization': `Bearer ${key}`
     };
 
@@ -267,10 +298,20 @@
     if (bodyStr) options.body = bodyStr;
 
     log(`--> ${method} ${path}`);
-    const res = await fetch(url, options);
-    const json = await res.json();
-    log(`<-- Response: ${JSON.stringify(json)}`);
-    return json;
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`HTTP ${res.status}: ${errText}`);
+      }
+      const json = await res.json();
+      log(`<-- Response: ${JSON.stringify(json)}`);
+      return json;
+    } catch (err) {
+      log(`[Connection Error] Could not reach http://${host}${path}`);
+      log(`[Hint] Is your computer or phone connected to the 'CraftThingy-5371' Wi-Fi? (Current target IP: ${host})`);
+      throw err;
+    }
   }
 
   async function fetchStatus() {
@@ -283,11 +324,16 @@
       const sec = data.security || {};
       const ctrl = data.device || data.controller;
 
+      document.getElementById('valName').textContent = sys.name || data.name || data.deviceName || "CraftThingy-Device";
+      if (!document.getElementById('devNameInput').value && (sys.name || data.name)) {
+        document.getElementById('devNameInput').value = sys.name || data.name;
+      }
       document.getElementById('valChip').textContent = sys.chip ? `${sys.chip} (${sys.boardTarget || ''})` : (data.chip || "Unknown");
       document.getElementById('valFlash').textContent = sys.flashBytes ? `${(sys.flashBytes / 1024 / 1024).toFixed(1)} MB` : (data.flashBytes ? `${(data.flashBytes / 1024 / 1024).toFixed(1)} MB` : "1.0 MB");
       document.getElementById('valCoreVer').textContent = sys.coreVersion || data.coreVersion || "1.0.0";
       document.getElementById('valRole').textContent = ota.activeRole || data.activeRole || "water_pump";
       document.getElementById('valWifi').textContent = net.state || data.wifiState || "ap_mode";
+      document.getElementById('valApSsid').textContent = net.apSsid ? `${net.apSsid} ${net.apSecured ? '[🔒 WPA2]' : '[Open]'}` : (net.state === 'ap_mode' ? 'Broadcasting' : '--');
       document.getElementById('valIp').textContent = net.ip || data.ip || "192.168.4.1";
       document.getElementById('valSeq').textContent = sec.rollingSequence !== undefined ? sec.rollingSequence : (data.rollingSequence || 1);
       document.getElementById('valOta').textContent = ota.status || data.otaStatus || "Idle";
@@ -313,11 +359,6 @@
         }
       }
 
-      if (sec.rollingSequence !== undefined) {
-        rollingSeq = sec.rollingSequence + 1;
-      } else if (data.rollingSequence !== undefined) {
-        rollingSeq = data.rollingSequence + 1;
-      }
       log(`Status updated successfully. ESP IP: ${net.ip || data.ip || '192.168.4.1'}`);
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
@@ -362,10 +403,42 @@
       const pass = document.getElementById('wifiPass').value;
       if (!ssid) { alert("Please enter SSID"); return; }
 
+      log(`Sending WiFi credentials for "${ssid}"...`);
       await apiRequest('POST', '/api/v1/wifi/config', { ssid, pass });
-      log("WiFi credentials sent! ESP is connecting in background.");
+      log(`[Success] WiFi credentials sent! ESP is connecting to "${ssid}" in background.`);
+      alert(`✅ WiFi credentials sent!\n\nThe ESP is connecting to "${ssid}" in the background.\nOnce connected, it will receive an IP from your router.`);
+      setTimeout(fetchStatus, 3000);
     } catch (e) {
       log(`Error saving WiFi: ${e.message}`);
+      alert(`❌ Failed to save WiFi: ${e.message}`);
+    }
+  }
+
+  async function saveDeviceName() {
+    try {
+      const name = document.getElementById('devNameInput').value.trim();
+      if (!name) { alert("Please enter device name"); return; }
+      await apiRequest('POST', '/api/v1/system/name', { name });
+      log(`Device internal identification name updated to: ${name}`);
+      setTimeout(fetchStatus, 400);
+    } catch (e) {
+      log(`Error saving device name: ${e.message}`);
+    }
+  }
+
+  async function saveAPConfig() {
+    try {
+      const ssid = document.getElementById('apSsidInput').value.trim();
+      const pass = document.getElementById('apPassInput').value.trim();
+      if (pass && pass.length < 8) {
+        alert("WPA2 Password must be at least 8 characters (or empty for open network)");
+        return;
+      }
+      await apiRequest('POST', '/api/v1/wifi/ap', { ssid, pass });
+      log(`Fallback Hotspot settings saved!`);
+      setTimeout(fetchStatus, 400);
+    } catch (e) {
+      log(`Error saving hotspot config: ${e.message}`);
     }
   }
 
