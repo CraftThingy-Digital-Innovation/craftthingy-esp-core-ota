@@ -187,6 +187,26 @@
     </div>
   </div>
 
+  <!-- Live Operation Monitoring & Manual Interruption Card -->
+  <div class="card" style="border-color: #f59e0b;">
+    <h2 style="color: #fbbf24;">5. Live Operation Monitoring & Manual Interruption</h2>
+    <div class="status-grid" style="margin-bottom:16px;">
+      <div class="status-item"><div class="label">Actuator / Relay</div><div class="val" id="ctrlRunning" style="color:#22c55e;">STOPPED</div></div>
+      <div class="status-item"><div class="label">Control Mode</div><div class="val" id="ctrlMode">AUTO</div></div>
+      <div class="status-item"><div class="label">Water Float Sensor</div><div class="val" id="ctrlSensor">IDLE</div></div>
+      <div class="status-item"><div class="label">Run Duration</div><div class="val" id="ctrlDuration">0s</div></div>
+    </div>
+    <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:12px;">
+      Use the buttons below to manually start, resume, or immediately interrupt and cut power to the pump relay:
+    </p>
+    <div class="btn-group">
+      <button class="danger" style="background:#dc2626; color:#fff; font-size:1rem;" onclick="sendControllerCommand('interrupt')">🚨 EMERGENCY STOP / INTERRUPT</button>
+      <button style="background:#16a34a; color:#fff;" onclick="sendControllerCommand('start')">▶️ FORCE PUMP ON</button>
+      <button class="secondary" onclick="sendControllerCommand('auto')">🔄 RESUME AUTO MODE</button>
+      <button class="secondary" onclick="sendControllerCommand('reset_safety')">🛡️ RESET SAFETY ALARM</button>
+    </div>
+  </div>
+
   <!-- Activity Console -->
   <div class="card">
     <h2>Activity Console</h2>
@@ -267,10 +287,43 @@
       document.getElementById('valSeq').textContent = data.rollingSequence;
       document.getElementById('valOta').textContent = data.otaStatus;
 
+      // Controller telemetry
+      if (data.controller) {
+        const c = data.controller;
+        const isRunning = c.pumpRunning || c.motorActive;
+        const runningEl = document.getElementById('ctrlRunning');
+        runningEl.textContent = isRunning ? "RUNNING" : "STOPPED";
+        runningEl.style.color = isRunning ? "#22c55e" : "#94a3b8";
+
+        let modeText = "AUTO";
+        if (c.interrupted) modeText = "INTERRUPTED (STOPPED)";
+        else if (!c.autoMode) modeText = "MANUAL";
+        if (c.dryRunAlarm) modeText += " [SAFETY TRIPPED]";
+        document.getElementById('ctrlMode').textContent = modeText;
+
+        if (c.tankDemandsFill !== undefined) {
+          document.getElementById('ctrlSensor').textContent = c.tankDemandsFill ? "LOW (FILL REQUIRED)" : "FULL / NORMAL";
+        }
+        if (c.runDurationSec !== undefined) {
+          document.getElementById('ctrlDuration').textContent = `${c.runDurationSec}s`;
+        }
+      }
+
       rollingSeq = data.rollingSequence + 1;
       log(`Status updated successfully. ESP IP: ${data.ip}`);
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
+    }
+  }
+
+  async function sendControllerCommand(cmd) {
+    try {
+      log(`Sending command '${cmd}' to controller...`);
+      const res = await apiRequest('POST', '/api/controller/command', { cmd });
+      log(`Result: ${res.message || JSON.stringify(res)}`);
+      setTimeout(fetchStatus, 300);
+    } catch (e) {
+      log(`Command failed: ${e.message}`);
     }
   }
 

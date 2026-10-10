@@ -97,6 +97,13 @@ def main():
     # Rotate Key
     subparsers.add_parser("rotate-key", help="Advance the rolling key ratchet to next sequence")
 
+    # Controller Commands
+    subparsers.add_parser("pump-status", help="Get live water pump / controller telemetry")
+    subparsers.add_parser("pump-stop", help="🚨 EMERGENCY INTERRUPT: Stop the pump immediately")
+    subparsers.add_parser("pump-start", help="▶️ Manually force pump ON")
+    subparsers.add_parser("pump-auto", help="🔄 RESUME AUTO float-switch mode")
+    subparsers.add_parser("pump-reset-safety", help="🛡️ Reset dry-run safety alarm")
+
     # Reboot
     subparsers.add_parser("reboot", help="Reboot device")
 
@@ -144,6 +151,31 @@ def main():
         print(json.dumps(res, indent=2))
         if "newRollingKey" in res:
             print(f"\n[!] New Key: {res['newRollingKey']}")
+
+    elif args.command == "pump-status":
+        res = send_signed_request(args.host, "GET", "/api/controller/status", args.key, args.seq)
+        print("[+] Water Pump / Controller Telemetry:")
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "pump-stop":
+        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "interrupt"})
+        print("[!] 🚨 EMERGENCY INTERRUPT RESULT:")
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "pump-start":
+        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "start"})
+        print("[+] Pump Manual Start Result:")
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "pump-auto":
+        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "auto"})
+        print("[+] Operation Resumed (Auto Mode):")
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "pump-reset-safety":
+        res = send_signed_request(args.host, "POST", "/api/controller/command", args.key, args.seq, {"cmd": "reset_safety"})
+        print("[+] Safety Alarm Reset Result:")
+        print(json.dumps(res, indent=2))
 
     elif args.command == "reboot":
         res = send_signed_request(args.host, "POST", "/api/reboot", args.key, args.seq)
