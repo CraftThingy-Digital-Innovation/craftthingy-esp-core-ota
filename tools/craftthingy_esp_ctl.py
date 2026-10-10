@@ -97,9 +97,12 @@ def main():
     # Rotate Key
     subparsers.add_parser("rotate-key", help="Advance the rolling key ratchet to next sequence")
 
-    # Set Master Bearer Token
+    # Set Master Bearer Token / Secret Key
     token_parser = subparsers.add_parser("set-token", help="Update the master Bearer token / secret key")
     token_parser.add_argument("--new-token", required=True, help="New secret Bearer token (min 16 chars)")
+
+    master_parser = subparsers.add_parser("set-master-key", help="Update the device Master Secret Key")
+    master_parser.add_argument("--new-master-key", required=True, help="New master secret key (min 16 chars, recommended 64-hex)")
 
     # Seed Rolling Key
     seed_parser = subparsers.add_parser("seed-key", help="Re-seed the rolling key ratchet with a new base seed & sequence")
@@ -171,6 +174,14 @@ def main():
         print("[+] Token Update Result:")
         print(json.dumps(res, indent=2))
         print(f"\n[!] Master Bearer token updated successfully! Use this token for external controllers.")
+
+    elif args.command == "set-master-key":
+        payload = {"token": args.new_master_key}
+        res = send_signed_request(args.host, "POST", "/api/v1/security/update-master-key", args.key, args.seq, payload)
+        print("[+] Master Secret Key Update Result:")
+        print(json.dumps(res, indent=2))
+        print(f"\n[!] Master Secret Key successfully updated in flash storage!")
+        print(f"[!] KEEP THIS SAFE: {args.new_master_key}")
 
     elif args.command == "seed-key":
         payload = {

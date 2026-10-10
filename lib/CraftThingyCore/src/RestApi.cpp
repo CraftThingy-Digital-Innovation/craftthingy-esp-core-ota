@@ -141,6 +141,7 @@ void RestApi::setupRoutes() {
     // Security & Key Ratchet
     _server.on("/api/v1/security/rotate-key", HTTP_POST, handleRotateKey);
     _server.on("/api/v1/security/update-token", HTTP_POST, handleUpdateToken);
+    _server.on("/api/v1/security/update-master-key", HTTP_POST, handleUpdateToken);
     _server.on("/api/v1/security/seed-key", HTTP_POST, handleSeedKey);
 
     // -----------------------------------------------------------------
