@@ -10,8 +10,8 @@ bool WiFiManager::_dnsActive = false;
 
 void WiFiManager::init() {
     DeviceConfig& cfg = ConfigStore::get();
-    if (strlen(cfg.deviceName) > 0 && strcmp(cfg.deviceName, "CraftThingy-Device") != 0) {
-        _apSSID = String(cfg.deviceName);
+    if (strlen(cfg.apSsid) > 0) {
+        _apSSID = String(cfg.apSsid);
     } else {
         String mac = getMacAddress();
         mac.replace(":", "");
@@ -33,10 +33,13 @@ bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t max
 
     _state = WIFI_STATE_CONNECTING;
     WiFi.mode(WIFI_STA);
+    DeviceConfig& cfg = ConfigStore::get();
+    String hostName = (strlen(cfg.deviceName) > 0) ? String(cfg.deviceName) : _apSSID;
+    hostName.replace(" ", "-");
 #if defined(ESP8266)
-    WiFi.hostname(_apSSID);
+    WiFi.hostname(hostName);
 #elif defined(ESP32)
-    WiFi.setHostname(_apSSID.c_str());
+    WiFi.setHostname(hostName.c_str());
 #endif
 
     for (uint8_t attempt = 1; attempt <= maxRetries; ++attempt) {
@@ -75,7 +78,9 @@ void WiFiManager::startAPPortal() {
     IPAddress netMsk(255, 255, 255, 0);
 
     WiFi.softAPConfig(apIP, apIP, netMsk);
-    WiFi.softAP(_apSSID.c_str(), nullptr, CRAFT_AP_CHANNEL);
+    DeviceConfig& cfg = ConfigStore::get();
+    const char* apPass = (strlen(cfg.apPassword) >= 8) ? cfg.apPassword : nullptr;
+    WiFi.softAP(_apSSID.c_str(), apPass, CRAFT_AP_CHANNEL);
 
     if (!_dnsActive) {
         _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -178,15 +183,36 @@ String WiFiManager::scanNetworksJson() {
     return json;
 }
 
+bool WiFiManager::isAPPasswordSet() {
+    DeviceConfig& cfg = ConfigStore::get();
+    return strlen(cfg.apPassword) >= 8;
+}
+
+void WiFiManager::configureAP(const String& ssid, const String& password) {
+    if (ssid.length() > 0) {
+        _apSSID = ssid;
+    } else {
+        String mac = getMacAddress();
+        mac.replace(":", "");
+        String suffix = mac.substring(mac.length() - 4);
+        suffix.toUpperCase();
+        _apSSID = "CraftThingy-" + suffix;
+    }
+
+    if (_state == WIFI_STATE_AP_PORTAL) {
+        const char* apPass = (password.length() >= 8) ? password.c_str() : nullptr;
+        WiFi.softAP(_apSSID.c_str(), apPass, CRAFT_AP_CHANNEL);
+    }
+}
+
 void WiFiManager::setDeviceName(const String& name) {
     if (name.length() == 0) return;
-    _apSSID = name;
+    String hostName = name;
+    hostName.replace(" ", "-");
 #if defined(ESP8266)
-    WiFi.hostname(_apSSID);
+    WiFi.hostname(hostName);
 #elif defined(ESP32)
-    WiFi.setHostname(_apSSID.c_str());
+    WiFi.setHostname(hostName.c_str());
 #endif
-    if (_state == WIFI_STATE_AP_PORTAL) {
-        WiFi.softAP(_apSSID.c_str());
-    }
+    // Intentionally does NOT alter _apSSID or SoftAP hotspot name!
 }

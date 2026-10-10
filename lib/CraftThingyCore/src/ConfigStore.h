@@ -18,6 +18,8 @@ struct DeviceConfig {
     uint32_t otaIntervalSec;
     bool configured;
     char deviceName[32];
+    char apSsid[33];
+    char apPassword[65];
 };
 
 class ConfigStore {
@@ -48,8 +50,11 @@ public:
     // Update Active Role
     static bool setActiveRole(const String& role);
 
-    // Update Device Name / Hostname
+    // Update Device Name (Internal identifier, does NOT alter WiFi AP name)
     static bool setDeviceName(const String& name);
+
+    // Update SoftAP Fallback WiFi Configuration (SSID & WPA2 Password)
+    static bool setAPConfig(const String& ssid, const String& pass);
 
     // Check if device is configured
     static bool isConfigured();

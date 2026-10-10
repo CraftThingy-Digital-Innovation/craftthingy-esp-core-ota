@@ -39,6 +39,8 @@ void ConfigStore::populateDefaults() {
     _config.otaIntervalSec = CRAFT_OTA_CHECK_INTERVAL_S;
     _config.configured = false;
     strncpy(_config.deviceName, "CraftThingy-Device", sizeof(_config.deviceName) - 1);
+    strncpy(_config.apSsid, "", sizeof(_config.apSsid) - 1);
+    strncpy(_config.apPassword, "", sizeof(_config.apPassword) - 1);
 }
 
 bool ConfigStore::init() {
@@ -112,9 +114,13 @@ bool ConfigStore::load() {
     strncpy(_config.activeRole, role.c_str(), sizeof(_config.activeRole) - 1);
     strncpy(_config.githubToken, token.c_str(), sizeof(_config.githubToken) - 1);
     String devName = prefs.getString("name", "CraftThingy-Device");
+    String apSsid = prefs.getString("ap_ssid", "");
+    String apPass = prefs.getString("ap_pass", "");
     _config.otaIntervalSec = interval;
     _config.configured = conf;
     strncpy(_config.deviceName, devName.c_str(), sizeof(_config.deviceName) - 1);
+    strncpy(_config.apSsid, apSsid.c_str(), sizeof(_config.apSsid) - 1);
+    strncpy(_config.apPassword, apPass.c_str(), sizeof(_config.apPassword) - 1);
 
     return true;
 #endif
@@ -155,6 +161,8 @@ bool ConfigStore::save() {
     prefs.putUInt("interval", _config.otaIntervalSec);
     prefs.putBool("configured", _config.configured);
     prefs.putString("name", _config.deviceName);
+    prefs.putString("ap_ssid", _config.apSsid);
+    prefs.putString("ap_pass", _config.apPassword);
     prefs.end();
     return true;
 #endif
@@ -224,6 +232,15 @@ bool ConfigStore::setDeviceName(const String& name) {
     if (name.length() == 0 || name.length() >= sizeof(_config.deviceName)) return false;
     strncpy(_config.deviceName, name.c_str(), sizeof(_config.deviceName) - 1);
     _config.deviceName[sizeof(_config.deviceName) - 1] = '\0';
+    return save();
+}
+
+bool ConfigStore::setAPConfig(const String& ssid, const String& pass) {
+    if (ssid.length() >= sizeof(_config.apSsid) || pass.length() >= sizeof(_config.apPassword)) return false;
+    strncpy(_config.apSsid, ssid.c_str(), sizeof(_config.apSsid) - 1);
+    _config.apSsid[sizeof(_config.apSsid) - 1] = '\0';
+    strncpy(_config.apPassword, pass.c_str(), sizeof(_config.apPassword) - 1);
+    _config.apPassword[sizeof(_config.apPassword) - 1] = '\0';
     return save();
 }
 

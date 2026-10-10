@@ -134,13 +134,18 @@ void RestApi::setupRoutes() {
     // System Telemetry & Maintenance
     _server.on("/api/v1/system/status", HTTP_GET, handleStatus);
     _server.on("/api/v1/system/reboot", HTTP_POST, handleReboot);
+    _server.on("/api/v1/system/name", HTTP_GET, handleGetDeviceName);
     _server.on("/api/v1/system/name", HTTP_POST, handleSetDeviceName);
+    _server.on("/api/v1/device/name", HTTP_GET, handleGetDeviceName);
     _server.on("/api/v1/device/name", HTTP_POST, handleSetDeviceName);
     _server.on("/api/v1/ota/check", HTTP_POST, handleTriggerUpdate);
 
     // WiFi Networking & Provisioning
     _server.on("/api/v1/wifi/scan", HTTP_GET, handleWifiScan);
     _server.on("/api/v1/wifi/config", HTTP_POST, handleWifiConfig);
+    _server.on("/api/v1/wifi/ap", HTTP_GET, handleGetAPConfig);
+    _server.on("/api/v1/wifi/ap", HTTP_POST, handleSetAPConfig);
+    _server.on("/api/v1/wifi/ap-config", HTTP_POST, handleSetAPConfig);
     _server.on("/api/v1/github/config", HTTP_POST, handleGitHubConfig);
 
     // Security & Key Ratchet
@@ -155,6 +160,10 @@ void RestApi::setupRoutes() {
     _server.on("/api/status", HTTP_GET, handleStatus);
     _server.on("/api/wifi/scan", HTTP_GET, handleWifiScan);
     _server.on("/api/wifi", HTTP_POST, handleWifiConfig);
+    _server.on("/api/wifi/ap", HTTP_GET, handleGetAPConfig);
+    _server.on("/api/wifi/ap", HTTP_POST, handleSetAPConfig);
+    _server.on("/api/name", HTTP_GET, handleGetDeviceName);
+    _server.on("/api/name", HTTP_POST, handleSetDeviceName);
     _server.on("/api/github", HTTP_POST, handleGitHubConfig);
     _server.on("/api/update", HTTP_POST, handleTriggerUpdate);
     _server.on("/api/key/rotate", HTTP_POST, handleRotateKey);
@@ -191,7 +200,9 @@ void RestApi::handleStatus() {
     data += "\"network\":{";
     data += "\"state\":\"" + String(WiFiManager::isConnected() ? "connected" : "ap_mode") + "\",";
     data += "\"ip\":\"" + (WiFiManager::isConnected() ? WiFiManager::getIPAddress() : WiFiManager::getAPIPAddress()) + "\",";
-    data += "\"ssid\":\"" + String(cfg.wifiSsid) + "\"";
+    data += "\"ssid\":\"" + String(cfg.wifiSsid) + "\",";
+    data += "\"apSsid\":\"" + WiFiManager::getApSSID() + "\",";
+    data += "\"apSecured\":" + String(WiFiManager::isAPPasswordSet() ? "true" : "false");
     data += "},";
 
     data += "\"ota\":{";
@@ -587,6 +598,26 @@ void RestApi::handleSeedKey() {
     }
 }
 
+void RestApi::handleGetDeviceName() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    DeviceConfig& cfg = ConfigStore::get();
+    const HardwareFingerprint& fp = ModuleDetector::getFingerprint();
+
+    String data = "{";
+    data += "\"deviceName\":\"" + String(cfg.deviceName) + "\",";
+    data += "\"activeRole\":\"" + String(cfg.activeRole) + "\",";
+    data += "\"mac\":\"" + fp.macAddress + "\",";
+    data += "\"boardTarget\":\"" + String(fp.archTag) + "\"";
+    data += "}";
+
+    sendStandardResponse(200, data);
+}
+
 void RestApi::handleSetDeviceName() {
     String authMethod;
     if (!isRequestAuthorized(_server, authMethod)) {
@@ -614,9 +645,80 @@ void RestApi::handleSetDeviceName() {
 
     if (ConfigStore::setDeviceName(name)) {
         WiFiManager::setDeviceName(name);
-        sendStandardSuccess("Device name updated to: " + name);
+        String data = "{";
+        data += "\"message\":\"Device internal identification name updated successfully\",";
+        data += "\"deviceName\":\"" + name + "\"";
+        data += "}";
+        sendStandardResponse(200, data);
     } else {
         sendStandardError(500, "Failed to save device name");
+    }
+}
+
+void RestApi::handleGetAPConfig() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    DeviceConfig& cfg = ConfigStore::get();
+    String data = "{";
+    data += "\"apSsid\":\"" + WiFiManager::getApSSID() + "\",";
+    data += "\"isCustomSsid\":" + String(strlen(cfg.apSsid) > 0 ? "true" : "false") + ",";
+    data += "\"isPasswordProtected\":" + String(WiFiManager::isAPPasswordSet() ? "true" : "false") + ",";
+    data += "\"apIP\":\"" + WiFiManager::getAPIPAddress() + "\"";
+    data += "}";
+
+    sendStandardResponse(200, data);
+}
+
+void RestApi::handleSetAPConfig() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    String ssid = _server.hasArg("ssid") ? _server.arg("ssid") : "";
+    String pass = _server.hasArg("pass") ? _server.arg("pass") : 
+                 (_server.hasArg("password") ? _server.arg("password") : "");
+
+    if (_server.hasArg("plain")) {
+        String body = _server.arg("plain");
+        auto extractJson = [&](const String& key) -> String {
+            int idx = body.indexOf("\"" + key + "\"");
+            if (idx < 0) return "";
+            int start = body.indexOf(':', idx) + 1;
+            int q1 = body.indexOf('"', start);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+            return "";
+        };
+
+        if (ssid.length() == 0) ssid = extractJson("ssid");
+        if (pass.length() == 0) pass = extractJson("pass");
+        if (pass.length() == 0) pass = extractJson("password");
+    }
+
+    ssid.trim();
+    pass.trim();
+
+    if (pass.length() > 0 && pass.length() < 8) {
+        sendStandardError(400, "WiFi AP password must be at least 8 characters for WPA2, or empty for open network");
+        return;
+    }
+
+    if (ConfigStore::setAPConfig(ssid, pass)) {
+        WiFiManager::configureAP(ssid, pass);
+        String data = "{";
+        data += "\"message\":\"WiFi fallback AP hotspot configuration updated successfully\",";
+        data += "\"apSsid\":\"" + WiFiManager::getApSSID() + "\",";
+        data += "\"isPasswordProtected\":" + String(pass.length() >= 8 ? "true" : "false");
+        data += "}";
+        sendStandardResponse(200, data);
+    } else {
+        sendStandardError(500, "Failed to persist AP configuration");
     }
 }
 
