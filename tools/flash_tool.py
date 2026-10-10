@@ -13,6 +13,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 
 # Ensure UTF-8 output if supported, fallback safely on legacy Windows cp1252 consoles
 if hasattr(sys.stdout, "reconfigure"):
@@ -27,6 +28,7 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 try:
+    import serial
     import serial.tools.list_ports
 except ImportError:
     print("[-] Missing requirement 'pyserial'. Please install with: pip install pyserial", file=sys.stderr)
@@ -46,6 +48,37 @@ def find_esp_ports():
     return matched, ports
 
 
+def check_and_assist_bootloader(port, baud=115200):
+    """
+    If the chip is actively running AT firmware or responsive over serial,
+    attempts a software reset (AT+RST) so the user can enter bootloader mode
+    simply by holding GPIO 0 to GND without unplugging the USB adapter.
+    """
+    try:
+        s = serial.Serial(port, baud, timeout=0.2)
+        s.write(b"AT\r\n")
+        time.sleep(0.1)
+        resp = s.read(s.in_waiting)
+        if b"OK" in resp:
+            print(f"[+] Detected responsive AT firmware on {port}!")
+            print("[*] Triggering software reset (AT+RST) to check boot mode strapping...")
+            s.write(b"AT+RST\r\n")
+            time.sleep(0.4)
+            boot_log = s.read(s.in_waiting).decode("latin1", "ignore")
+            s.close()
+            if "boot mode:(1," in boot_log:
+                print("[+] SUCCESS: ESP8266 entered UART Bootloader Mode (boot mode: 1)!")
+                return True
+            elif "boot mode:(3," in boot_log:
+                print("[!] Chip rebooted, but GPIO 0 is currently HIGH (boot mode: 3 - Normal Run).")
+                print("    -> Hold Pin 3 (GPIO 0) grounded to Pin 1 (GND) to enter Download Mode (boot mode: 1).\n")
+        else:
+            s.close()
+    except Exception:
+        pass
+    return False
+
+
 def run_esptool(cmd_args):
     """Executes esptool using the current Python environment."""
     full_cmd = [sys.executable, "-m", "esptool"] + cmd_args
@@ -61,14 +94,21 @@ def print_esp01_boot_instructions():
     print("Unlike ESP32 dev boards with auto-reset DTR/RTS circuitry, ESP-01")
     print("requires physical pin strapping to enter ROM bootloader mode:")
     print("")
-    print("  1. UNPLUG the USB-to-UART adapter from your computer.")
-    print("  2. Physically BRIDGE GPIO 0 to GND:")
-    print("     - If your adapter has a switch: Toggle it from 'UART' to 'PROG'.")
-    print("     - If your adapter has headers: Jumper GPIO 0 (pin 5) to GND (pin 1).")
-    print("     - Ensure CH_PD / EN is connected to 3.3V (VCC).")
-    print("  3. PLUG the USB adapter back into the USB port while holding GPIO 0 LOW.")
-    print("  4. Re-run your probe or flash command.")
-    print("  5. When flashing finishes, UNPLUG, REMOVE the GPIO 0 jumper, and PLUG BACK IN.")
+    print("  Pinout (Antenna facing UP):")
+    print("    Top Row:    [Pin 1: GND]   [Pin 2: GPIO 2]  [Pin 3: GPIO 0]  [Pin 4: RX]")
+    print("    Bottom Row: [Pin 5: VCC]   [Pin 6: CH_PD]   [Pin 7: RST]     [Pin 8: TX]")
+    print("")
+    print("  HOW TO TRIGGER BOOTLOADER:")
+    print("  Method A (Without unplugging):")
+    print("    1. Connect a wire between Pin 3 (GPIO 0) and Pin 1 (GND).")
+    print("    2. While holding that wire, re-run this tool: python tools/flash_tool.py probe")
+    print("       (The tool will send a software reset; with GPIO 0 grounded, it boots to mode 1).")
+    print("")
+    print("  Method B (Power-cycle):")
+    print("    1. UNPLUG the USB adapter.")
+    print("    2. Bridge Pin 3 (GPIO 0) to Pin 1 (GND).")
+    print("    3. PLUG the USB adapter back in WHILE holding GPIO 0 to GND.")
+    print("    4. Re-run your probe or flash command.")
     print("=" * 70 + "\n")
 
 
@@ -82,7 +122,7 @@ Examples:
   python flash_tool.py probe
 
   # Probe explicit COM port:
-  python flash_tool.py --port COM17 probe
+  python flash_tool.py --port COM18 probe
 
   # Flash core firmware binary to ESP-01 (1MB):
   python flash_tool.py flash --bin firmware-esp01s.bin
@@ -94,7 +134,7 @@ Examples:
   python flash_tool.py backup --out esp01_backup.bin --size 1MB
 """
     )
-    parser.add_argument("--port", "-p", default=None, help="Serial COM port (e.g. COM17, /dev/ttyUSB0). Auto-detected if omitted.")
+    parser.add_argument("--port", "-p", default=None, help="Serial COM port (e.g. COM18, /dev/ttyUSB0). Auto-detected if omitted.")
     parser.add_argument("--baud", "-b", default="115200", help="Serial baud rate (default: 115200; use 460800 or 921600 for high-speed flashing)")
     parser.add_argument("--chip", "-c", default="esp8266", choices=["auto", "esp8266", "esp32", "esp32s2", "esp32s3", "esp32c3", "esp32c6"], help="Target SoC architecture (default: esp8266)")
 
@@ -135,6 +175,9 @@ Examples:
         else:
             print("[-] No serial COM ports detected on this computer!", file=sys.stderr)
             sys.exit(1)
+
+    # Software-assisted bootloader check (if chip is running AT firmware)
+    check_and_assist_bootloader(port, int(args.baud))
 
     # ACTION: PROBE
     if args.action == "probe":
@@ -191,7 +234,7 @@ Examples:
         res = run_esptool(cmd)
         if res.returncode == 0:
             print("\n[+] Flashing completed successfully!")
-            print("[!] IMPORTANT: Disconnect GPIO 0 from GND (switch back to 'UART') and reboot to run.")
+            print("[!] Disconnect GPIO 0 from GND and reboot to run application.")
         else:
             print("\n[-] Flashing failed!")
             print_esp01_boot_instructions()
