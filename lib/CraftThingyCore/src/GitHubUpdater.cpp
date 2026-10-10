@@ -91,6 +91,7 @@ bool GitHubUpdater::checkForUpdates(bool force) {
     }
 
     _status = OTA_STATUS_CHECKING;
+    _lastError = "";
     DeviceConfig& cfg = ConfigStore::get();
     const HardwareFingerprint& fp = ModuleDetector::getFingerprint();
 
@@ -99,23 +100,27 @@ bool GitHubUpdater::checkForUpdates(bool force) {
     String controllerRepo = String(cfg.controllerRepo);
     String activeRole = String(cfg.activeRole);
 
-    // Tier 1: Check Core Framework Updater
-    // If core repo update found, update core first
-    bool coreUpdated = checkAndApplyRepoUpdate(org, coreRepo, CRAFT_CORE_VERSION, String(fp.archTag));
-    if (coreUpdated) {
-        return true; // Device will reboot
-    }
-
-    // Tier 2: Check Controller Application (e.g. water_pump, washing_machine)
-    if (controllerRepo.length() > 0 && activeRole != "none") {
+    // If an active controller role is configured (e.g. water_pump, washing_machine),
+    // update the controller application first because it embeds the core framework!
+    if (controllerRepo.length() > 0 && activeRole != "none" && activeRole != "core") {
         String assetTarget = activeRole + "-" + String(fp.archTag);
-        bool appUpdated = checkAndApplyRepoUpdate(org, controllerRepo, "1.0.0", assetTarget);
+        bool appUpdated = checkAndApplyRepoUpdate(org, controllerRepo, CRAFT_CORE_VERSION, assetTarget);
         if (appUpdated) {
+            return true; // Device will reboot
+        }
+    } else {
+        // Pure Core OTA Mode (standalone framework)
+        bool coreUpdated = checkAndApplyRepoUpdate(org, coreRepo, CRAFT_CORE_VERSION, String(fp.archTag));
+        if (coreUpdated) {
             return true; // Device will reboot
         }
     }
 
-    _status = OTA_STATUS_NO_UPDATE;
+    if (_lastError.length() > 0) {
+        _status = OTA_STATUS_FAILED;
+    } else {
+        _status = OTA_STATUS_NO_UPDATE;
+    }
     return false;
 }
 
@@ -170,7 +175,7 @@ bool GitHubUpdater::fetchLatestRelease(const String& org, const String& repo,
 
     WiFiClientSecure client;
 #if defined(ESP8266)
-    client.setBufferSizes(CRAFT_TLS_BUFFER_SIZE, CRAFT_TLS_BUFFER_SIZE);
+    client.setBufferSizes(CRAFT_TLS_BUFFER_SIZE, 512);
     client.setInsecure();
 #elif defined(ESP32)
     client.setInsecure();
@@ -313,7 +318,7 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
 
         WiFiClientSecure client;
 #if defined(ESP8266)
-        client.setBufferSizes(CRAFT_TLS_BUFFER_SIZE, CRAFT_TLS_BUFFER_SIZE);
+        client.setBufferSizes(CRAFT_TLS_BUFFER_SIZE, 512);
         client.setInsecure();
 #elif defined(ESP32)
         client.setInsecure();

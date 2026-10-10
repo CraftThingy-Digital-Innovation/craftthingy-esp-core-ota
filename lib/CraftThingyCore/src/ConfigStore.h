@@ -26,6 +26,8 @@ struct DeviceConfig {
     char wifiSubnet[16];
     char wifiDns1[16];
     char wifiDns2[16];
+    int8_t gpioRelay;   // Configured Relay GPIO pin (-1 = board default)
+    int8_t gpioSensor;  // Configured Float Sensor GPIO pin (-1 = board default)
 };
 
 class ConfigStore {
@@ -58,6 +60,9 @@ public:
                               const String& subnet = "255.255.255.0",
                               const String& dns1 = "",
                               const String& dns2 = "");
+
+    // Update Hardware GPIO pin assignments (persisted across OTA updates)
+    static bool setPinConfig(int8_t relayPin, int8_t sensorPin);
 
     // Update Active Role
     static bool setActiveRole(const String& role);

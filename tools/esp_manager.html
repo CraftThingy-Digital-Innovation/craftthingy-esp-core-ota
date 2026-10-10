@@ -87,19 +87,112 @@
       overflow-y: auto;
       white-space: pre-wrap;
     }
+    .chip-btn {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.1);
+    }
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 380px;
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .toast.info { border-left: 4px solid var(--accent); }
+    .toast.success { border-left: 4px solid var(--success); }
+    .toast.warning { border-left: 4px solid #f59e0b; }
+    .toast.error { border-left: 4px solid var(--danger); }
+    .toast-icon { font-size: 1.2rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .toast-content { flex: 1; font-size: 0.85rem; }
+    .toast-title { font-weight: 700; color: #fff; margin-bottom: 2px; font-size: 0.9rem; }
+    .toast-msg { color: var(--text-dim); line-height: 1.4; }
+    .toast-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0;
+      margin-left: 4px;
+      line-height: 1;
+    }
+    .toast-close:hover { color: #fff; }
+    @keyframes toastSlideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
+<!-- Floating Toast Notification Container -->
+<div id="toastContainer" class="toast-container"></div>
+
 <div class="container">
   <header>
     <h1>CraftThingy ESP Manager</h1>
     <p>Zero-Install Browser Config & HMAC-SHA256 Rolling Key Controller</p>
+  </header>
+
   <!-- Network Connection Guide Banner -->
   <div style="background:#1e293b; border:1px solid #0284c7; border-left:4px solid #38bdf8; border-radius:8px; padding:12px 16px; margin-bottom:20px; font-size:0.9rem; line-height:1.5;">
     <strong style="color:#38bdf8;">📡 Connection Guide:</strong>
     <div style="color:#94a3b8; margin-top:4px;">
       • If the device is in setup mode, connect your computer's Wi-Fi to <strong>CraftThingy-5371</strong> (Default IP: <code>192.168.4.1</code>).<br>
       • If the device is already on your home Wi-Fi, change the address above to its local home IP (e.g. <code>192.168.1.xxx</code>).
+    </div>
+  </div>
+
+  <!-- Unreachable / Connection Error Alert Banner -->
+  <div id="unreachableBanner" style="display:none; background:#450a0a; border:1px solid #ef4444; border-left:4px solid #f87171; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-size:0.92rem; line-height:1.5;">
+    <strong style="color:#f87171; font-size:1.02rem;">⚠️ Could Not Reach ESP at <span id="unreachableIp">192.168.4.1</span></strong>
+    <div style="color:#fecaca; margin-top:6px;">
+      If your device is already connected to your home Wi-Fi (e.g. <strong>Neun 4G</strong>), it is no longer reachable at <code>192.168.4.1</code>.<br>
+      Its assigned dynamic router IP is: <strong style="color:#fff; font-size:1rem;" id="suggestedStaIp">192.168.2.228</strong>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button type="button" style="background:#ef4444; color:#fff; font-weight:700; flex:none; padding:8px 16px; border-radius:6px; cursor:pointer;" onclick="setHost('192.168.2.228')">👉 Switch to Home Wi-Fi IP (192.168.2.228)</button>
+      <button type="button" class="secondary" style="flex:none; padding:8px 16px;" onclick="setHost('craftthingy-5371.local')">Try mDNS (craftthingy-5371.local)</button>
     </div>
   </div>
 
@@ -123,6 +216,12 @@
     <div class="form-group">
       <label>ESP Device Address (IP or Hostname)</label>
       <input type="text" id="espHost" value="192.168.4.1">
+      <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+        <span style="font-size:0.75rem; color:var(--text-dim);">Quick Select:</span>
+        <button type="button" class="chip-btn" onclick="setHost('192.168.2.228')">🏠 Home Wi-Fi (192.168.2.228)</button>
+        <button type="button" class="chip-btn" onclick="setHost('192.168.4.1')">📶 Setup AP (192.168.4.1)</button>
+        <button type="button" class="chip-btn" onclick="setHost('craftthingy-5371.local')">🌐 mDNS (.local)</button>
+      </div>
     </div>
     <div class="form-group">
       <label>Current Secret / Rolling Key</label>
@@ -276,11 +375,21 @@
 
     <div style="background:#0b1120; border-left:3px solid var(--accent); padding:10px 14px; border-radius:6px; font-size:0.85rem; color:var(--text-dim); margin-bottom:16px; line-height:1.4;">
       💡 <strong>Custom Developer Projects:</strong> Anyone can build their own hardware controller on top of CraftThingy Core. Simply enter your GitHub username/organization and repo above. The core automatically matches release assets named <code>{role}-{board}.bin</code> (e.g. <code>smart_feeder-esp01s.bin</code>).
+    <!-- Live Interactive OTA Progress Feedback Box -->
+    <div id="otaProgressBox" style="display:none; background:#0b1329; border:1px solid #0284c7; border-left:4px solid #38bdf8; border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong id="otaProgressTitle" style="color:#38bdf8; font-size:0.95rem;">🚀 Contacting ESP & Checking GitHub...</strong>
+        <span id="otaProgressSpinner" class="spinner"></span>
+      </div>
+      <p id="otaProgressMsg" style="font-size:0.85rem; color:#94a3b8; margin-top:6px; line-height:1.4;">Connecting to device and checking releases...</p>
+      <div id="otaProgressBarContainer" style="display:none; margin-top:10px; width:100%; height:6px; background:#1e293b; border-radius:3px; overflow:hidden;">
+        <div id="otaProgressBar" style="width:100%; height:100%; background:linear-gradient(90deg, #38bdf8, #818cf8);"></div>
+      </div>
     </div>
 
     <div class="btn-group">
       <button onclick="saveGitHub()">Save & Ratchet Key</button>
-      <button class="secondary" onclick="triggerUpdate()">Check OTA Now</button>
+      <button id="btnCheckOta" class="secondary" onclick="triggerUpdate()">Check OTA Now</button>
       <button class="danger" onclick="rebootDevice()">Reboot ESP</button>
     </div>
   </div>
@@ -390,6 +499,52 @@
     return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  function showToast(type, title, msg, duration = 4500) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    // Dismiss any previous toast to prevent clutter/stacking
+    container.innerHTML = '';
+
+    const icons = {
+      info: 'ℹ️',
+      success: '✅',
+      warning: '⚠️',
+      error: '❌',
+      progress: '🚀'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <div class="toast-icon">${icons[type] || 'ℹ️'}</div>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-msg">${msg}</div>
+      </div>
+      <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+
+    container.appendChild(toast);
+
+    if (duration > 0) {
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+    return toast;
+  }
+
+  function setHost(host) {
+    document.getElementById('espHost').value = host;
+    localStorage.setItem('craftthingy_esp_host', host);
+    log(`Target host changed to: ${host}`);
+    showToast('info', 'Target IP Changed', `Connecting to ${host}...`);
+    fetchStatus();
+  }
+
   async function apiRequest(method, path, bodyObj = null) {
     const host = document.getElementById('espHost').value.trim();
     const key = document.getElementById('secretKey').value.trim();
@@ -431,6 +586,7 @@
   }
 
   async function fetchStatus() {
+    const host = document.getElementById('espHost').value.trim();
     try {
       const json = await apiRequest('GET', '/api/v1/system/status');
       const data = json.data || json;
@@ -439,6 +595,10 @@
       const ota = data.ota || {};
       const sec = data.security || {};
       const ctrl = data.device || data.controller;
+
+      // Hide unreachable alert if previously shown
+      const unreach = document.getElementById('unreachableBanner');
+      if (unreach) unreach.style.display = 'none';
 
       document.getElementById('valName').textContent = sys.name || data.name || data.deviceName || "CraftThingy-Device";
       if (!document.getElementById('devNameInput').value && (sys.name || data.name)) {
@@ -450,15 +610,17 @@
       document.getElementById('valRole').textContent = ota.activeRole || data.activeRole || "water_pump";
       document.getElementById('valWifi').textContent = net.state || data.wifiState || "ap_mode";
       document.getElementById('valApSsid').textContent = net.apSsid ? `${net.apSsid} ${net.apSecured ? '[🔒 WPA2]' : '[Open]'}` : (net.state === 'ap_mode' ? 'Broadcasting' : '--');
-      if (net.state === 'connected' && net.staIp && net.staIp !== '0.0.0.0') {
-        document.getElementById('valIp').textContent = `${net.staIp} (AP: ${net.apIp || '192.168.4.1'})`;
+      const staIp = net.ip || net.staIp;
+      if (net.state === 'connected' && staIp && staIp !== '0.0.0.0' && staIp !== '192.168.4.1') {
+        document.getElementById('valIp').textContent = `${staIp} (AP: ${net.apIp || '192.168.4.1'})`;
         const banner = document.getElementById('lanDiscoveryBanner');
         banner.style.display = 'block';
         document.getElementById('discoveredSsid').textContent = net.ssid || "Home Wi-Fi";
-        document.getElementById('discoveredIp').textContent = net.staIp;
+        document.getElementById('discoveredIp').textContent = staIp;
+        localStorage.setItem('craftthingy_esp_last_sta_ip', staIp);
         const hostName = (sys.name || 'craftthingy').toLowerCase().replace(/\s+/g, '-');
         document.getElementById('discoveredMdns').textContent = `http://${hostName}.local`;
-        document.getElementById('openNewIpLink').href = `http://${net.staIp}`;
+        document.getElementById('openNewIpLink').href = `http://${staIp}`;
       } else {
         document.getElementById('valIp').textContent = net.ip || data.ip || "192.168.4.1";
       }
@@ -578,6 +740,14 @@
       log(`Status updated successfully. ESP IP: ${net.ip || data.ip || '192.168.4.1'}`);
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
+      const unreach = document.getElementById('unreachableBanner');
+      if (unreach) {
+        document.getElementById('unreachableIp').textContent = host;
+        const lastKnown = localStorage.getItem('craftthingy_esp_last_sta_ip') || '192.168.2.228';
+        document.getElementById('suggestedStaIp').textContent = lastKnown;
+        unreach.style.display = 'block';
+      }
+      showToast('error', 'Connection Failed', `Could not reach ESP at ${host}. If connected to Wi-Fi, try 192.168.2.228`, 5000);
     }
   }
 
@@ -792,12 +962,109 @@
     }
   }
 
-  async function triggerUpdate() {
+  let otaPollActive = false;
+
+  async function pollOtaStatus(attempt = 0) {
+    if (!otaPollActive) return;
+    const btn = document.getElementById('btnCheckOta');
+    const pTitle = document.getElementById('otaProgressTitle');
+    const pMsg = document.getElementById('otaProgressMsg');
+    const pBar = document.getElementById('otaProgressBarContainer');
+
+    if (attempt >= 10) {
+      otaPollActive = false;
+      if (btn) { btn.disabled = false; btn.textContent = "Check OTA Now"; }
+      if (pMsg && pMsg.textContent.includes("querying")) {
+        pMsg.textContent = "Check complete. Review OTA Status in Card 2.";
+      }
+      return;
+    }
+
     try {
-      await apiRequest('POST', '/api/v1/ota/check');
-      log("OTA update check triggered!");
+      const json = await apiRequest('GET', '/api/v1/system/status');
+      const data = json.data || json;
+      const ota = data.ota || {};
+      const statusStr = ota.status || "";
+
+      document.getElementById('valOta').textContent = statusStr || "Checking...";
+
+      if (statusStr.includes("Checking for Updates")) {
+        if (pTitle) pTitle.textContent = "🔎 Checking GitHub Releases...";
+        if (pMsg) pMsg.textContent = "ESP is contacting api.github.com and comparing release versions...";
+      } else if (statusStr.includes("Downloading") || statusStr.includes("Flashing")) {
+        if (pTitle) pTitle.textContent = "📥 Downloading Firmware...";
+        if (pMsg) pMsg.textContent = "Downloading release asset from GitHub straight into ESP Flash memory. Do NOT power off!";
+        if (pBar) pBar.style.display = 'block';
+      } else if (statusStr.includes("Success") || statusStr.includes("Rebooting")) {
+        otaPollActive = false;
+        if (pTitle) pTitle.textContent = "🎉 Update Success!";
+        if (pMsg) pMsg.textContent = "Firmware verified and written! ESP is rebooting into new firmware. Reconnecting in 10s...";
+        showToast('success', 'OTA Update Complete!', 'ESP is rebooting into the new firmware.', 8000);
+        if (btn) { btn.disabled = false; btn.textContent = "Check OTA Now"; }
+        setTimeout(fetchStatus, 10000);
+        return;
+      } else if (statusStr.includes("Up to Date")) {
+        otaPollActive = false;
+        if (pTitle) pTitle.textContent = "✅ Firmware Up to Date";
+        if (pMsg) pMsg.textContent = "No newer release found on GitHub. Your ESP is running the latest firmware.";
+        showToast('info', 'Firmware Up to Date', 'Your device is running the latest firmware release.', 5000);
+        if (btn) { btn.disabled = false; btn.textContent = "Check OTA Now"; }
+        return;
+      } else if (statusStr.includes("Failed") || statusStr.includes("Postponed")) {
+        otaPollActive = false;
+        if (pTitle) pTitle.textContent = "⚠️ OTA Check Note";
+        if (pMsg) pMsg.textContent = statusStr;
+        showToast('warning', 'OTA Status', statusStr, 6000);
+        if (btn) { btn.disabled = false; btn.textContent = "Check OTA Now"; }
+        return;
+      }
+    } catch (pollErr) {
+      if (attempt > 2) {
+        log(`[OTA Polling] Connection lost (${pollErr.message}) - device may be updating/rebooting.`);
+      }
+    }
+
+    if (otaPollActive) {
+      setTimeout(() => pollOtaStatus(attempt + 1), 2000);
+    }
+  }
+
+  async function triggerUpdate() {
+    const host = document.getElementById('espHost').value.trim();
+    const btn = document.getElementById('btnCheckOta');
+    const pBox = document.getElementById('otaProgressBox');
+    const pTitle = document.getElementById('otaProgressTitle');
+    const pMsg = document.getElementById('otaProgressMsg');
+    const pBar = document.getElementById('otaProgressBarContainer');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Checking OTA...";
+    }
+    if (pBox) pBox.style.display = 'block';
+    if (pTitle) pTitle.textContent = "🚀 Contacting ESP & Checking GitHub...";
+    if (pMsg) pMsg.textContent = `Sending OTA update check trigger to http://${host}...`;
+    if (pBar) pBar.style.display = 'none';
+
+    showToast('info', 'OTA Check Initiated', `Sending update trigger to ${host}...`);
+
+    try {
+      const res = await apiRequest('POST', '/api/v1/ota/check');
+      log("OTA update check triggered successfully!");
+      showToast('success', 'OTA Check Triggered', 'ESP acknowledged update trigger! Checking GitHub releases...', 4000);
+
+      if (pTitle) pTitle.textContent = "🔎 Checking GitHub Releases...";
+      if (pMsg) pMsg.textContent = "ESP received command and is querying api.github.com for release assets...";
+
+      otaPollActive = true;
+      setTimeout(() => pollOtaStatus(0), 1200);
+
     } catch (e) {
       log(`Error triggering update: ${e.message}`);
+      if (pTitle) pTitle.textContent = "❌ Connection Failed";
+      if (pMsg) pMsg.textContent = `Could not reach ESP at ${host}. If connected to home Wi-Fi, change IP to 192.168.2.228!`;
+      showToast('error', 'Cannot Reach ESP', `Failed to send OTA command to ${host}. Please check your target IP address!`, 6000);
+      if (btn) { btn.disabled = false; btn.textContent = "Check OTA Now"; }
     }
   }
 
@@ -806,12 +1073,25 @@
     try {
       await apiRequest('POST', '/api/v1/system/reboot');
       log("Reboot command sent.");
+      showToast('info', 'Rebooting ESP', 'Device reboot command issued. Reconnecting in 6s...', 6000);
+      setTimeout(fetchStatus, 6000);
     } catch (e) {
       log(`Reboot error: ${e.message}`);
+      showToast('error', 'Reboot Error', e.message);
     }
   }
 
   window.onload = () => {
+    const savedHost = localStorage.getItem('craftthingy_esp_host');
+    if (savedHost) {
+      document.getElementById('espHost').value = savedHost;
+    } else {
+      // Suggest home wifi IP if previously discovered
+      const lastSta = localStorage.getItem('craftthingy_esp_last_sta_ip');
+      if (lastSta) {
+        document.getElementById('espHost').value = lastSta;
+      }
+    }
     fetchStatus();
   };
 </script>

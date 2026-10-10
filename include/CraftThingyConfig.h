@@ -39,7 +39,7 @@
 // =================================================================
 // Default Configuration Constants
 // =================================================================
-#define CRAFT_CORE_VERSION          "1.1.0"
+#define CRAFT_CORE_VERSION          "1.0.0"
 #define CRAFT_DEFAULT_ORG           "CraftThingy-Digital-Innovation"
 #define CRAFT_DEFAULT_CORE_REPO     "craftthingy-esp-core-ota"
 #define CRAFT_DEFAULT_CONTROLLER_REPO "water-pump-controller"
@@ -61,7 +61,7 @@
 
 // Buffer tuning for ESP8266 1MB Flash / RAM constraints
 #if defined(ESP8266)
-    #define CRAFT_TLS_BUFFER_SIZE   1024    // Reduced BearSSL buffer (saves ~28KB RAM!)
+    #define CRAFT_TLS_BUFFER_SIZE   4096    // 4KB required for GitHub TLS certificate chain without MFLN!
     #define CRAFT_STREAM_CHUNK_SIZE 512
 #else
     #define CRAFT_TLS_BUFFER_SIZE   4096

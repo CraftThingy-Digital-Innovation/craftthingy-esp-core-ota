@@ -47,6 +47,8 @@ void ConfigStore::populateDefaults() {
     strncpy(_config.wifiSubnet, "255.255.255.0", sizeof(_config.wifiSubnet) - 1);
     strncpy(_config.wifiDns1, "8.8.8.8", sizeof(_config.wifiDns1) - 1);
     strncpy(_config.wifiDns2, "1.1.1.1", sizeof(_config.wifiDns2) - 1);
+    _config.gpioRelay = -1;  // -1 = use board hardware default
+    _config.gpioSensor = -1; // -1 = use board hardware default
 }
 
 bool ConfigStore::init() {
@@ -270,6 +272,12 @@ bool ConfigStore::setAPConfig(const String& ssid, const String& pass) {
     _config.apSsid[sizeof(_config.apSsid) - 1] = '\0';
     strncpy(_config.apPassword, pass.c_str(), sizeof(_config.apPassword) - 1);
     _config.apPassword[sizeof(_config.apPassword) - 1] = '\0';
+    return save();
+}
+
+bool ConfigStore::setPinConfig(int8_t relayPin, int8_t sensorPin) {
+    _config.gpioRelay = relayPin;
+    _config.gpioSensor = sensorPin;
     return save();
 }
 
