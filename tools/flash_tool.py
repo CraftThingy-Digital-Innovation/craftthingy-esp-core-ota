@@ -14,6 +14,18 @@ import os
 import subprocess
 import sys
 
+# Ensure UTF-8 output if supported, fallback safely on legacy Windows cp1252 consoles
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 try:
     import serial.tools.list_ports
 except ImportError:
@@ -44,7 +56,7 @@ def run_esptool(cmd_args):
 def print_esp01_boot_instructions():
     """Prints step-by-step physical bootstrapping instructions for ESP-01."""
     print("=" * 70)
-    print("🚨 ESP-01 / ESP-01S BOOTSTRAPPING GUIDE (UART DOWNLOAD MODE)")
+    print("[!] ESP-01 / ESP-01S BOOTSTRAPPING GUIDE (UART DOWNLOAD MODE)")
     print("=" * 70)
     print("Unlike ESP32 dev boards with auto-reset DTR/RTS circuitry, ESP-01")
     print("requires physical pin strapping to enter ROM bootloader mode:")
@@ -126,7 +138,7 @@ Examples:
 
     # ACTION: PROBE
     if args.action == "probe":
-        print(f"\n[🔍] Probing hardware on {port} (Baud: {args.baud}, Chip: {args.chip})...")
+        print(f"\n[*] Probing hardware on {port} (Baud: {args.baud}, Chip: {args.chip})...")
         chip_args = ["--chip", args.chip] if args.chip != "auto" else []
         
         # 1. Flash ID & Manufacturer
@@ -137,15 +149,15 @@ Examples:
             sys.exit(1)
 
         # 2. Read MAC
-        print("\n[🔍] Reading device MAC address...")
+        print("\n[*] Reading device MAC address...")
         run_esptool(["--port", port, "--baud", args.baud] + chip_args + ["read-mac"])
 
         # 3. Chip ID (if esp8266)
         if args.chip in ["esp8266", "auto"]:
-            print("\n[🔍] Reading ESP8266 Chip ID...")
+            print("\n[*] Reading ESP8266 Chip ID...")
             run_esptool(["--port", port, "--baud", args.baud] + chip_args + ["chip-id"])
 
-        print("\n[✅] Hardware probe completed successfully!")
+        print("\n[+] Hardware probe completed successfully!")
 
     # ACTION: FLASH
     elif args.action == "flash":
@@ -154,11 +166,11 @@ Examples:
             sys.exit(1)
 
         bin_size = os.path.getsize(args.bin)
-        print(f"\n[⚡] Preparing to flash '{args.bin}' ({bin_size:,} bytes) to {port} at {args.addr}...")
+        print(f"\n[*] Preparing to flash '{args.bin}' ({bin_size:,} bytes) to {port} at {args.addr}...")
         
         # 2-Slot OTA size guard check for 1MB ESP-01
         if args.flash_size == "1MB" and bin_size > 491520:  # ~480KB limit
-            print(f"[⚠️] WARNING: Firmware size ({bin_size:,} bytes) exceeds standard ESP-01 2-slot OTA limit (~480 KB)!")
+            print(f"[!] WARNING: Firmware size ({bin_size:,} bytes) exceeds standard ESP-01 2-slot OTA limit (~480 KB)!")
             print("    OTA self-updates will fail if partition boundary is crossed.")
 
         chip_args = ["--chip", args.chip] if args.chip != "auto" else []
@@ -178,7 +190,7 @@ Examples:
 
         res = run_esptool(cmd)
         if res.returncode == 0:
-            print("\n[🎉] Flashing completed successfully!")
+            print("\n[+] Flashing completed successfully!")
             print("[!] IMPORTANT: Disconnect GPIO 0 from GND (switch back to 'UART') and reboot to run.")
         else:
             print("\n[-] Flashing failed!")
@@ -187,11 +199,11 @@ Examples:
 
     # ACTION: ERASE
     elif args.action == "erase":
-        print(f"\n[🧹] Erasing flash on {port}...")
+        print(f"\n[*] Erasing flash on {port}...")
         chip_args = ["--chip", args.chip] if args.chip != "auto" else []
         res = run_esptool(["--port", port, "--baud", args.baud] + chip_args + ["erase-flash"])
         if res.returncode == 0:
-            print("\n[✅] Flash memory erased completely!")
+            print("\n[+] Flash memory erased completely!")
         else:
             print("\n[-] Flash erase failed!")
             print_esp01_boot_instructions()
@@ -199,7 +211,7 @@ Examples:
 
     # ACTION: BACKUP
     elif args.action == "backup":
-        print(f"\n[💾] Backing up flash memory from {port} to '{args.out}'...")
+        print(f"\n[*] Backing up flash memory from {port} to '{args.out}'...")
         chip_args = ["--chip", args.chip] if args.chip != "auto" else []
         res = run_esptool([
             "--port", port,
@@ -211,7 +223,7 @@ Examples:
             args.out
         ])
         if res.returncode == 0:
-            print(f"\n[✅] Backup saved successfully to '{args.out}' ({os.path.getsize(args.out):,} bytes).")
+            print(f"\n[+] Backup saved successfully to '{args.out}' ({os.path.getsize(args.out):,} bytes).")
         else:
             print("\n[-] Backup failed!")
             print_esp01_boot_instructions()
