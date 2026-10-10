@@ -5,7 +5,7 @@
 [![OTA](https://img.shields.io/badge/OTA-GitHub%20Releases%20Streaming-green.svg)]()
 [![Framework](https://img.shields.io/badge/Framework-Arduino%20IDE%20%7C%20PlatformIO-orange.svg)]()
 
-The foundational embedded framework for the **CraftThingy Digital Innovation** ecosystem. Provides self-updating capabilities, dynamic WiFi provisioning with failover AP, military-grade API security with rolling keys, and pluggable hardware controller interfaces.
+The foundational embedded framework for the **CraftThingy Digital Innovation** ecosystem. Provides self-updating capabilities, dynamic WiFi provisioning with failover AP, military-grade API security with rolling keys, critical-operation safety interlocks, and pluggable hardware controller interfaces.
 
 Optimized specifically for strict memory and flash limits on **ESP-01 / ESP-01S (1MB Flash, ~35KB Free RAM)** and all **ESP32 variants (ESP32, S2, S3, C3, C6)**.
 
@@ -14,14 +14,18 @@ Optimized specifically for strict memory and flash limits on **ESP-01 / ESP-01S 
 ## 📑 Table of Contents
 1. [Architecture Overview](#-architecture-overview)
 2. [Hardware Constraint Engineering (ESP-01 1MB Flash)](#-hardware-constraint-engineering-esp-01-1mb-flash)
-3. [Cryptographic Security & Rolling Key Ratchet](#-cryptographic-security--rolling-key-ratchet)
-4. [WiFi Failover & Provisioning State Machine](#-wifi-failover--provisioning-state-machine)
-5. [Two-Tier GitHub OTA Engine](#-two-tier-github-ota-engine)
-6. [REST API Reference (Port 80)](#-rest-api-reference-port-80)
-7. [Pluggable Controller Interface (`IDeviceController`)](#-pluggable-controller-interface-idevicecontroller)
-8. [Building & Flashing in Arduino IDE](#-building--flashing-in-arduino-ide)
-9. [Building & Flashing in PlatformIO](#-building--flashing-in-platformio)
-10. [Automated CI/CD Workflow](#-automated-cicd-workflow)
+3. [Zero-Debris Module Switching (Clean In-Place Overwrite)](#-zero-debris-module-switching-clean-in-place-overwrite)
+4. [Cryptographic Security & Rolling Key Ratchet](#-cryptographic-security--rolling-key-ratchet)
+5. [Critical Operation Safety Interlock](#-critical-operation-safety-interlock)
+6. [WiFi Failover & Provisioning State Machine](#-wifi-failover--provisioning-state-machine)
+7. [Two-Tier GitHub OTA Engine](#-two-tier-github-ota-engine)
+8. [Hardware Probing & Flashing Tool (`flash_tool.py`)](#-hardware-probing--flashing-tool-flash_toolpy)
+9. [Operational Tooling Suite (`tools/`)](#-operational-tooling-suite-tools)
+10. [Standardized REST API Reference (Port 80)](#-standardized-rest-api-reference-v1-port-80)
+11. [Pluggable Controller Interface (`IDeviceController`)](#-pluggable-controller-interface-idevicecontroller)
+12. [Building & Flashing in Arduino IDE](#-building--flashing-in-arduino-ide)
+13. [Building & Flashing in PlatformIO](#-building--flashing-in-platformio)
+14. [Automated CI/CD Workflow](#-automated-cicd-workflow)
 
 ---
 
@@ -38,7 +42,7 @@ graph TD
         E -- Yes --> G[Station Mode: Online]
         F --> H[RestApi Server: Port 80]
         G --> H
-        H --> I[HMAC-SHA256 & Anti-Replay Validator]
+        H --> I[HMAC-SHA256 & Dual-Key Master Validator]
         I --> J[Execute Config / Rotate Key Ratchet]
         G --> K[GitHubUpdater: Background OTA Checker]
         K --> L[Tier 1: craftthingy-esp-core-ota]
@@ -50,6 +54,7 @@ graph TD
         N --> Q[Custom IoT Modules]
     end
     H -.-> N
+    K -.->|Safety Interlock isSafeToUpdate| N
 ```
 
 ---
@@ -73,9 +78,32 @@ ESP-01 and ESP-01S modules have severe constraints:
 
 ---
 
+## 🧼 Zero-Debris Module Switching (Clean In-Place Overwrite)
+
+A common concern when switching application modules dynamically over the air (e.g. converting a unit from a **Water Pump** to a **Washing Machine**) is leftover disk trash or deserted file fragments.
+
+### How CraftThingy Guarantees Zero Leftover Files:
+1. **No Fragmented Filesystem Storage**: Unlike an operating system (Linux / Windows) that extracts loose script or application files into directories, the ESP runs as a bare-metal microcontroller.
+2. **Dual-Slot Flash Partition Architecture**:
+   ```text
+   Physical 1MB SPI Flash Layout:
+   ┌──────────────────────┬──────────────────────┬──────────┬──────────┐
+   │     OTA Slot 0       │     OTA Slot 1       │  EEPROM  │  System  │
+   │      (~470 KB)       │      (~470 KB)       │  (4 KB)  │  (64 KB) │
+   └──────────────────────┴──────────────────────┴──────────┴──────────┘
+         ▲                      ▲
+      Active                 Inactive
+   (Running Pump)         (Target for Washing Machine)
+   ```
+3. **Monolithic Sector Overwrite**: When reconfigured via API (`POST /api/v1/github/config` with `role: "washing_machine"`), the updater downloads the new module's binary and writes directly into the **inactive flash partition**. The write process erases and overwrites each 4KB flash sector consecutively from byte 0.
+4. **Atomic Pointer Swap**: Once SHA-256 verification completes, the bootloader's boot vector swaps active execution to the newly written partition.
+5. **No Deserted Files**: When the module is changed again in the future, the older partition is completely overwritten. **Not a single byte of orphan code or file debris remains.**
+
+---
+
 ## 🔐 Cryptographic Security & Rolling Key Ratchet
 
-Sensitive API endpoints (WiFi configuration, GitHub target reconfiguration, manual OTA triggers, reboot) require authorization.
+Sensitive API endpoints (WiFi configuration, GitHub target reconfiguration, manual OTA triggers, reboot, key rotation) require cryptographic authorization.
 
 ### 1. Request Signature Algorithm
 Incoming requests must include:
@@ -86,17 +114,33 @@ Incoming requests must include:
   ```text
   METHOD\nPATH\nTIMESTAMP\nNONCE\nBODY
   ```
-  Using the current rolling key.
+  Using the current active rolling key.
 
 ### 2. Rolling Key Ratchet (Forward Secrecy)
 After any configuration change (or via `/api/v1/security/rotate-key`), the device derives the next key using:
 $$K_{n+1} = \text{HMAC-SHA256}(K_n, \text{"CRAFT\_ROLL\_KEY\_"} + n)$$
 The old key is permanently erased from flash memory. If an attacker intercepts a past request, they cannot forge future commands.
 
-### 3. Anti-Replay Protection
+### 3. Dual-Key Master Protection
+Changing the Master Secret Key (`POST /api/v1/security/update-master-key`) or re-seeding the key generator (`POST /api/v1/security/seed-key`) enforces **Dual-Key Authorization**:
+- Must provide a valid HMAC signature using the active rolling key, **AND**
+- Must supply the current Master Key (via header `X-Master-Key` or JSON body `current_master_key`).
+Even if an attacker intercepts a single ephemeral rolling key, they cannot hijack the root master key.
+
+### 4. Anti-Replay Protection
 - Timestamps skewed by more than ±300 seconds are rejected.
 - Monotonic sequence numbers must be strictly greater than the last recorded sequence.
 - A 16-entry ring buffer caches recently seen nonces to block replay attempts.
+
+---
+
+## 🛡️ Critical Operation Safety Interlock
+
+Updating firmware in the middle of active hardware operation can be dangerous (e.g. cutting off water pump mid-cycle, leaving valves stuck open, or corrupting state machines).
+
+The core framework integrates hardware safety interlocks via [`IDeviceController`](file:///d:/CraftThingy/esp-stuff/craftthingy-esp-core-ota/lib/CraftThingyCore/src/DeviceController.h):
+- **`isSafeToUpdate()`**: Before downloading or flashing any OTA binary, the core queries the active controller. If the pump is actively pumping or a wash cycle is running, the update is **immediately aborted or postponed** (`OTA_STATUS_POSTPONED`).
+- **`prepareForUpdate()`**: If safe, the controller safely shuts down high-current relays and persists operational counters before the flasher begins writing to flash.
 
 ---
 
@@ -133,9 +177,62 @@ GitHub release asset URLs redirect (HTTP 302) to AWS S3 (`objects.githubusercont
 
 ---
 
-## 🌐 Standardized REST API Specification (`v1`, Port 80)
+## ⚡ Hardware Probing & Flashing Tool (`flash_tool.py`)
 
-All endpoints follow an industry-standard RESTful schema with **mandatory authentication** across all routes (including telemetry and WiFi scans) to prevent unauthorized surveillance or physical machinery manipulation. Responses are formatted with a consistent **JSend envelope**:
+A production-ready Python flasher located in [`tools/flash_tool.py`](file:///d:/CraftThingy/esp-stuff/craftthingy-esp-core-ota/tools/flash_tool.py) for probing silicon hardware, erasing flash, backing up memory, and flashing binaries.
+
+### Installation:
+```bash
+pip install esptool pyserial
+```
+
+### 🚨 ESP-01 / ESP-01S Physical Bootstrapping Pinout:
+Standard ESP-01 modules do not have automatic USB-UART reset transistors. To flash them:
+1. **Unplug** the USB adapter from your PC.
+2. **Bridge GPIO 0 to GND**:
+   - If your adapter has a switch: Slide it to **`PROG`** (not `UART`).
+   - If using wires/headers: Connect **GPIO 0 (Pin 5) to GND (Pin 1)**. Ensure **CH_PD / EN (Pin 4)** is connected to **3.3V (VCC)**.
+3. **Plug the adapter back into your USB port** while holding GPIO 0 LOW. The chip enters UART download mode (`boot mode:(1,x)`).
+4. Run your probe or flash command.
+5. **After flashing completes**: Unplug, remove the GPIO 0 jumper (or slide switch back to `UART`), and plug back in to run.
+
+### Flashing Tool Commands:
+```bash
+# 1. Probe connected hardware (auto-detects COM port, reads MAC, flash size, chip ID):
+python tools/flash_tool.py probe
+
+# 2. Probe with explicit COM port:
+python tools/flash_tool.py --port COM17 probe
+
+# 3. Flash compiled firmware to ESP-01 (1MB):
+python tools/flash_tool.py flash --bin firmware-esp01s.bin
+
+# 4. High-speed flashing with verify (460800 baud):
+python tools/flash_tool.py --baud 460800 flash --bin firmware-esp01s.bin --verify
+
+# 5. Erase entire SPI flash (clean factory wipe):
+python tools/flash_tool.py erase
+
+# 6. Backup existing 1MB flash contents to binary file:
+python tools/flash_tool.py backup --out backup_esp01.bin --size 1MB
+```
+
+---
+
+## 🧰 Operational Tooling Suite (`tools/`)
+
+All provisioning, testing, and operational tools are located in [`tools/`](file:///d:/CraftThingy/esp-stuff/craftthingy-esp-core-ota/tools/):
+
+1. **[`flash_tool.py`](./tools/flash_tool.py)**: Silicon probe, flash erase, memory backup, and binary flasher.
+2. **[`esp_manager.html`](./tools/esp_manager.html)**: Zero-installation, single-file browser dashboard with WebCrypto HMAC-SHA256 calculations, live telemetry, WiFi scanner, and GitHub reconfiguration.
+3. **[`craftthingy_esp_ctl.py`](./tools/craftthingy_esp_ctl.py)**: Developer CLI for scripting REST API calls, inspecting telemetry, emergency stopping pumps, and ratcheting keys.
+4. **[`generate_release.py`](./tools/generate_release.py)**: Release packaging utility that renames build outputs to target board naming conventions and generates SHA-256 hashes.
+
+---
+
+## 🌐 Standardized REST API Reference (`v1`, Port 80)
+
+All endpoints follow an industry-standard RESTful schema with **mandatory authentication** across all routes. Responses are formatted with a consistent **JSend envelope**:
 
 ### Standard Response Envelope
 ```json
@@ -165,7 +262,7 @@ All endpoints follow an industry-standard RESTful schema with **mandatory authen
 |---|---|---|---|
 | `GET` | `/api/v1/system/status` | Comprehensive system, network, OTA & controller telemetry | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/system/reboot` | Safely reboots the microcontroller | **Yes** (HMAC / Bearer) |
-| `GET` | `/api/v1/device/status` | Live hardware controller metrics (e.g., pump state, water level) | **Yes** (HMAC / Bearer) |
+| `GET` | `/api/v1/device/status` | Live hardware controller metrics (pump state, cycle status) | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/device/command` | Execute hardware commands (`interrupt`, `start`, `auto`, `reset_safety`) | **Yes** (HMAC / Bearer) |
 | `GET` | `/api/v1/wifi/scan` | Scans nearby 2.4GHz WiFi SSIDs and signal strengths | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/wifi/config` | Saves SSID/password and connects in background | **Yes** (HMAC / Bearer) |
@@ -173,198 +270,46 @@ All endpoints follow an industry-standard RESTful schema with **mandatory authen
 | `POST` | `/api/v1/ota/check` | Triggers immediate GitHub release check and OTA flash | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/security/rotate-key` | Advances HMAC rolling key ratchet for forward secrecy | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/security/update-token` | Updates master secret Bearer token in persistent storage | **Yes** (HMAC / Bearer) |
-| `POST` | `/api/v1/security/seed-key` | Re-seeds the rolling key ratchet with a new base key & counter | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/security/update-master-key` | Updates Master Secret Key (enforces Dual-Key proof) | **Yes** (HMAC + Master Key) |
+| `POST` | `/api/v1/security/seed-key` | Re-seeds rolling key ratchet with custom seed | **Yes** (HMAC + Master Key) |
 
 *(Note: Legacy unversioned routes `/api/...` remain available as backward-compatible aliases).*
 
 ---
 
-### 1. `GET /api/v1/system/status`
-Returns complete device metrics, networking, OTA targets, and attached controller state.
-- **Headers**: `X-Signature`, `X-Timestamp`, `X-Nonce`, `X-Sequence` OR `Authorization: Bearer <key>`
-- **Response**:
+### Key API Payload Examples:
+
+#### 1. Configure Target GitHub Repository & Role (`POST /api/v1/github/config`)
+Swaps active firmware module cleanly via OTA without leaving any residual files:
 ```json
 {
-  "status": "success",
-  "code": 200,
-  "uptime": 342,
-  "data": {
-    "system": {
-      "status": "online",
-      "coreVersion": "1.0.0",
-      "boardTarget": "esp01s",
-      "chip": "ESP8266 (ESP-01S 1MB)",
-      "flashBytes": 1048576,
-      "freeHeap": 36840,
-      "mac": "84:F3:EB:12:34:56"
-    },
-    "network": {
-      "state": "connected",
-      "ip": "192.168.1.105",
-      "ssid": "Home-Network"
-    },
-    "ota": {
-      "status": "Firmware Up to Date",
-      "org": "CraftThingy-Digital-Innovation",
-      "coreRepo": "craftthingy-esp-core-ota",
-      "controllerRepo": "craftthingy-esp-water-pump",
-      "activeRole": "water_pump"
-    },
-    "security": {
-      "rollingSequence": 3,
-      "currentRollingKeyPrefix": "a1b2c3d4..."
-    },
-    "device": {
-      "role": "water_pump",
-      "pumpRunning": true,
-      "interrupted": false,
-      "autoMode": true,
-      "tankDemandsFill": true,
-      "dryRunAlarm": false,
-      "runDurationSec": 45,
-      "maxRunTimeSec": 900
-    }
-  }
+  "org": "CraftThingy-Digital-Innovation",
+  "core_repo": "craftthingy-esp-core-ota",
+  "controller_repo": "craftthingy-esp-washing-machine",
+  "role": "washing_machine",
+  "token": ""
 }
 ```
 
-### 2. `GET /api/v1/device/status` (Alias: `/api/v1/pump/status`)
-Returns hardware controller telemetry directly.
-- **Auth**: HMAC Rolling Key or Bearer Token
-- **Response**:
+#### 2. Update Master Secret Key with Dual-Key Protection (`POST /api/v1/security/update-master-key`)
 ```json
 {
-  "status": "success",
-  "code": 200,
-  "uptime": 342,
-  "data": {
-    "role": "water_pump",
-    "pumpRunning": false,
-    "interrupted": false,
-    "autoMode": true,
-    "tankDemandsFill": false,
-    "dryRunAlarm": false,
-    "runDurationSec": 0,
-    "maxRunTimeSec": 900
-  }
+  "current_master_key": "oldMasterSecretKey123!",
+  "new_master_key": "newSuperSecureSecretMasterKey2026!"
 }
 ```
 
-### 3. `POST /api/v1/device/command` (Alias: `/api/v1/pump/command`)
-Executes immediate operational controls on the pump or appliance.
-- **Auth**: HMAC Rolling Key or Bearer Token
-- **Payload (`JSON` or form parameters)**:
+#### 3. Hardware Operational Commands (`POST /api/v1/device/command`)
 ```json
 {
   "cmd": "interrupt"
 }
 ```
-Available commands:
-- `interrupt` (or `stop`, `off`): **Immediate emergency stop**. Cuts relay power instantly and disables auto-mode.
+Available commands for Water Pump:
+- `interrupt` (or `stop`, `off`): Immediate emergency stop.
 - `start` (or `on`): Manually forces pump relay ON.
-- `auto` (or `resume`): Clears manual/interrupted states and returns to autonomous float switch sensing.
-- `reset_safety`: Resets the 15-minute dry-run safety lockout alarm.
-
-### 4. `GET /api/v1/wifi/scan`
-Scans and lists nearby wireless networks.
-- **Auth**: HMAC Rolling Key or Bearer Token
-- **Response**:
-```json
-{
-  "status": "success",
-  "code": 200,
-  "uptime": 345,
-  "data": [
-    {"ssid": "Home-Network", "rssi": -55, "enc": true},
-    {"ssid": "Workshop", "rssi": -72, "enc": true}
-  ]
-}
-```
-
-### 5. `POST /api/v1/wifi/config`
-Configures WiFi credentials and attempts immediate background connection.
-- **Auth**: HMAC Rolling Key or Bearer Token
-- **Payload**:
-```json
-{
-  "ssid": "Home-Network",
-  "pass": "SecretPassword123"
-}
-```
-
-### 6. `POST /api/v1/github/config`
-Reconfigures target GitHub organization, repositories, and role, automatically advancing the rolling key ratchet for forward secrecy.
-- **Auth**: HMAC Rolling Key or Bearer Token
-- **Payload**:
-```json
-{
-  "org": "CraftThingy-Digital-Innovation",
-  "core_repo": "craftthingy-esp-core-ota",
-  "controller_repo": "craftthingy-esp-water-pump",
-  "role": "water_pump",
-  "token": ""
-}
-```
-
-### 7. `POST /api/v1/ota/check`
-Forces an immediate dual-tier GitHub release check and OTA flash.
-- **Auth**: HMAC Rolling Key or Bearer Token
-
-### 8. `POST /api/v1/security/rotate-key`
-Manually advances the rolling key ratchet forward by one sequence.
-- **Auth**: HMAC Rolling Key or Bearer Token
-
-### 9. `POST /api/v1/security/update-token`
-Updates the static master secret key / Tier 2 Bearer token in wear-leveled flash storage (EEPROM/NVS).
-- **Auth**: HMAC Rolling Key or existing Bearer Token
-- **Payload**:
-```json
-{
-  "token": "MyNewSecureSuperSecretKey2026!"
-}
-```
-- **Response**:
-```json
-{
-  "status": "success",
-  "code": 200,
-  "uptime": 450,
-  "data": {
-    "message": "Master Bearer token updated successfully",
-    "tokenPrefix": "MyNe..."
-  }
-}
-```
-
-### 10. `POST /api/v1/security/seed-key`
-Re-seeds the HMAC-SHA256 rolling key ratchet engine with a custom base key/seed and resets the sequence counter.
-- **Auth**: HMAC Rolling Key or Bearer Token
-- **Payload**:
-```json
-{
-  "seed": "e1f2a3b4c5d60718293a4b5c6d7e8f90112233445566778899aabbccddeeff11",
-  "sequence": 1,
-  "sync_master": true
-}
-```
-- **Response**:
-```json
-{
-  "status": "success",
-  "code": 200,
-  "uptime": 452,
-  "data": {
-    "message": "Rolling key ratchet re-seeded successfully",
-    "startingSequence": 1,
-    "syncedMaster": true,
-    "keyPrefix": "e1f2a3b4..."
-  }
-}
-```
-
-### 11. `POST /api/v1/system/reboot`
-Safely restarts the microcontroller.
-- **Auth**: HMAC Rolling Key or Bearer Token
+- `auto` (or `resume`): Resumes autonomous float switch mode.
+- `reset_safety`: Clears 15-minute dry-run safety alarm.
 
 ---
 
@@ -381,6 +326,8 @@ public:
     virtual const char* getAppVersion() const = 0;
     virtual bool handleCommand(const String& cmd, const String& payload, String& response) = 0;
     virtual String getStatusJson() = 0;
+    virtual bool isSafeToUpdate() { return true; }
+    virtual void prepareForUpdate() {}
 };
 ```
 
