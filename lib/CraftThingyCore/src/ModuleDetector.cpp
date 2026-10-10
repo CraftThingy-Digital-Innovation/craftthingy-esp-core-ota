@@ -1,5 +1,7 @@
 #include "ModuleDetector.h"
-#include <Wire.h>
+#if !defined(ESP8266) || defined(CRAFT_ENABLE_I2C)
+    #include <Wire.h>
+#endif
 
 #if defined(ESP8266)
     #include <ESP8266WiFi.h>
@@ -74,6 +76,7 @@ void ModuleDetector::identifyChipAndFlash() {
 }
 
 String ModuleDetector::scanI2cPeripherals(uint8_t sdaPin, uint8_t sclPin) {
+#if !defined(ESP8266) || defined(CRAFT_ENABLE_I2C)
     Wire.begin(sdaPin, sclPin);
     String detected = "";
     uint8_t count = 0;
@@ -90,23 +93,16 @@ String ModuleDetector::scanI2cPeripherals(uint8_t sdaPin, uint8_t sclPin) {
         delay(2);
     }
     return detected;
+#else
+    return "";
+#endif
 }
 
 void ModuleDetector::probePeripherals() {
 #if defined(ESP8266)
-    // On ESP-01 / ESP-01S, GPIO0 (SDA) and GPIO2 (SCL) are often used for I2C if connected
-    String i2cDevices = scanI2cPeripherals(0, 2);
-    _fingerprint.detectedPeripheral = i2cDevices.length() > 0 ? ("I2C:" + i2cDevices) : "None";
-
-    // Heuristics: if ADS1115 (0x48) or PCF8574 (0x20/0x27/0x3F) relay found
-    if (i2cDevices.indexOf("0x48") >= 0 || i2cDevices.indexOf("0x27") >= 0 || i2cDevices.indexOf("0x3F") >= 0) {
-        _fingerprint.detectedRole = ROLE_WATER_PUMP;
-        _fingerprint.roleString = "water_pump";
-    } else {
-        _fingerprint.detectedRole = ROLE_UNASSIGNED;
-        _fingerprint.roleString = "generic";
-    }
-
+    _fingerprint.detectedPeripheral = "None";
+    _fingerprint.detectedRole = ROLE_UNASSIGNED;
+    _fingerprint.roleString = "generic";
 #elif defined(ESP32)
     #if defined(CONFIG_IDF_TARGET_ESP32C3)
         String i2cDevices = scanI2cPeripherals(4, 5);

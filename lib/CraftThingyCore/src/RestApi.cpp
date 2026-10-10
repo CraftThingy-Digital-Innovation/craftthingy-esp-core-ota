@@ -186,8 +186,9 @@ void RestApi::setupRoutes() {
     _server.on("/api/v1/security/update-master-key", HTTP_POST, handleUpdateToken);
     _server.on("/api/v1/security/seed-key", HTTP_POST, handleSeedKey);
 
+#if !defined(ESP8266)
     // -----------------------------------------------------------------
-    // Backwards-Compatible Aliases
+    // Backwards-Compatible Aliases (ESP32 only)
     // -----------------------------------------------------------------
     _server.on("/api/status", HTTP_GET, handleStatus);
     _server.on("/api/wifi/scan", HTTP_GET, handleWifiScan);
@@ -204,6 +205,7 @@ void RestApi::setupRoutes() {
     _server.on("/api/controller/command", HTTP_POST, handleControllerCommand);
     _server.on("/api/hardware/pins", HTTP_GET, handleGetHardwarePins);
     _server.on("/api/hardware/pins", HTTP_POST, handleSetHardwarePins);
+#endif
 
     // Pre-flight CORS and fallback 404
     _server.onNotFound(handleNotFound);
