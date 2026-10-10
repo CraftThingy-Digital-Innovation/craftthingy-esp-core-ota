@@ -3,6 +3,7 @@
 #include "ModuleDetector.h"
 #include "WiFiManager.h"
 #include "CraftThingyCrypto.h"
+#include "CraftThingyCore.h"
 
 #if defined(ESP8266)
     #include <ESP8266WiFi.h>
@@ -36,6 +37,7 @@ String GitHubUpdater::getStatusString() {
         case OTA_STATUS_IDLE:        return "Idle";
         case OTA_STATUS_CHECKING:    return "Checking for Updates";
         case OTA_STATUS_NO_UPDATE:   return "Firmware Up to Date";
+        case OTA_STATUS_POSTPONED:   return "Update Postponed (Hardware Busy / Critical Operation)";
         case OTA_STATUS_DOWNLOADING: return "Downloading & Flashing OTA";
         case OTA_STATUS_SUCCESS:     return "OTA Success (Rebooting)";
         case OTA_STATUS_FAILED:      return "Update Failed: " + _lastError;
@@ -72,6 +74,19 @@ bool GitHubUpdater::checkForUpdates(bool force) {
     if (!WiFiManager::isConnected()) {
         _lastError = "WiFi not connected";
         _status = OTA_STATUS_FAILED;
+        return false;
+    }
+
+    // Safety Interlock: Never start OTA check/update during critical operation!
+    IDeviceController* ctrl = CraftThingyCore.getController();
+    if (ctrl != nullptr && !ctrl->isSafeToUpdate()) {
+        _status = OTA_STATUS_POSTPONED;
+        _lastError = "OTA postponed: attached controller is busy performing critical operation";
+        DeviceConfig& cfg = ConfigStore::get();
+        uint32_t intervalMs = cfg.otaIntervalSec * 1000UL;
+        if (intervalMs > 60000UL) {
+            _lastCheckMillis = millis() - (intervalMs - 60000UL); // Retry in 60s
+        }
         return false;
     }
 
@@ -130,6 +145,14 @@ bool GitHubUpdater::checkAndApplyRepoUpdate(const String& org, const String& rep
 
     if (cleanRemote == cleanLocal) {
         return false; // Up to date
+    }
+
+    // Safety Interlock: Ensure hardware is still idle right before downloading & flashing
+    IDeviceController* ctrl = CraftThingyCore.getController();
+    if (ctrl != nullptr && !ctrl->isSafeToUpdate()) {
+        _status = OTA_STATUS_POSTPONED;
+        _lastError = "OTA download postponed: hardware became busy before flashing";
+        return false;
     }
 
     // Update found! Download and flash
@@ -426,6 +449,10 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
 
         if (written == contentLength && Update.end(true)) {
             _status = OTA_STATUS_SUCCESS;
+            IDeviceController* ctrl = CraftThingyCore.getController();
+            if (ctrl != nullptr) {
+                ctrl->prepareForUpdate();
+            }
             delay(500);
             ESP.restart();
             return true;

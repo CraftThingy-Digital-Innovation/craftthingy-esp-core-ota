@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include "../DeviceController.h"
+#include <CraftThingyCore.h>
 
 class WaterPumpController : public IDeviceController {
 public:
@@ -102,6 +102,16 @@ public:
         json += "\"maxRunTimeSec\":" + String(_maxRunTimeMs / 1000);
         json += "}";
         return json;
+    }
+
+    bool isSafeToUpdate() const override {
+        // Critical safety: Unsafe to update or reboot while pump is actively running!
+        return !_pumpRunning;
+    }
+
+    void prepareForUpdate() override {
+        // Ensure relay is de-energized into fail-safe state before flash reboot
+        setRelay(false);
     }
 
 private:

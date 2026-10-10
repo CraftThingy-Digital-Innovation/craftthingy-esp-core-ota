@@ -28,4 +28,12 @@ public:
 
     // Return human-readable status for web portal or status API
     virtual String getStatusJson() = 0;
+
+    // Safety Interlock for OTA Firmware Updates:
+    // Returns true if the controller is in an idle, safe state to update and reboot.
+    // Returns false if a critical operation (e.g. pump actively running, spin cycle) is underway.
+    virtual bool isSafeToUpdate() const { return true; }
+
+    // Gracefully shutdown actuators / place hardware in fail-safe state prior to flash reboot.
+    virtual void prepareForUpdate() {}
 };

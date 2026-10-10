@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include "../DeviceController.h"
+#include <CraftThingyCore.h>
 
 enum WasherState {
     WASHER_IDLE,
@@ -116,6 +116,16 @@ public:
         json += "\"drainActive\":" + String(digitalRead(_drainPin) == HIGH ? "true" : "false");
         json += "}";
         return json;
+    }
+
+    bool isSafeToUpdate() const override {
+        // Safe to update only when machine is completely idle, completed, or in error
+        return (_state == WASHER_IDLE || _state == WASHER_COMPLETED || _state == WASHER_ERROR);
+    }
+
+    void prepareForUpdate() override {
+        // Disengage all valves and motors prior to flash reboot
+        allRelaysOff();
     }
 
 private:
