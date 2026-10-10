@@ -187,7 +187,15 @@ bool GitHubUpdater::fetchLatestRelease(const String& org, const String& repo,
         return false;
     }
 
-    String path = "/repos/" + org + "/" + repo + "/releases/latest";
+    String targetOrg = org;
+    String targetRepo = repo;
+    int slashIdx = repo.indexOf('/');
+    if (slashIdx > 0) {
+        targetOrg = repo.substring(0, slashIdx);
+        targetRepo = repo.substring(slashIdx + 1);
+    }
+
+    String path = "/repos/" + targetOrg + "/" + targetRepo + "/releases/latest";
     DeviceConfig& cfg = ConfigStore::get();
 
     client.print("GET " + path + " HTTP/1.1\r\n");

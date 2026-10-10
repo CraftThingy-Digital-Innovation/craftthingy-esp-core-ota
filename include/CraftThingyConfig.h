@@ -42,8 +42,14 @@
 #define CRAFT_CORE_VERSION          "1.0.0"
 #define CRAFT_DEFAULT_ORG           "CraftThingy-Digital-Innovation"
 #define CRAFT_DEFAULT_CORE_REPO     "craftthingy-esp-core-ota"
-#define CRAFT_DEFAULT_CONTROLLER_REPO "water-pump-controller"
-#define CRAFT_DEFAULT_ROLE          "water_pump"
+
+#ifndef CRAFT_DEFAULT_CONTROLLER_REPO
+    #define CRAFT_DEFAULT_CONTROLLER_REPO ""
+#endif
+
+#ifndef CRAFT_DEFAULT_ROLE
+    #define CRAFT_DEFAULT_ROLE          "core"
+#endif
 
 // Networking & Failover Defaults
 #define CRAFT_WIFI_MAX_RETRIES      5
