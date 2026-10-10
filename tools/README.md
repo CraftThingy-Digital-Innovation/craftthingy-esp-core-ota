@@ -65,6 +65,9 @@ python craftthingy_esp_ctl.py trigger-update --host 192.168.4.1 --key "<CURRENT_
 # Manually advance rolling key ratchet
 python craftthingy_esp_ctl.py rotate-key --host 192.168.4.1 --key "<CURRENT_KEY>"
 
+# Update Master Bearer Token (for Home Assistant / External Controller)
+python craftthingy_esp_ctl.py set-token --host 192.168.4.1 --new-token "MySecretKey2026!" --key "<CURRENT_KEY>"
+
 # Reboot device
 python craftthingy_esp_ctl.py reboot --host 192.168.4.1 --key "<CURRENT_KEY>"
 ```

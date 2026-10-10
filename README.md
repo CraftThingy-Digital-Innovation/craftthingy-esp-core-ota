@@ -172,6 +172,7 @@ All endpoints follow an industry-standard RESTful schema with **mandatory authen
 | `POST` | `/api/v1/github/config` | Updates target GitHub repos and ratchets rolling key | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/ota/check` | Triggers immediate GitHub release check and OTA flash | **Yes** (HMAC / Bearer) |
 | `POST` | `/api/v1/security/rotate-key` | Advances HMAC rolling key ratchet for forward secrecy | **Yes** (HMAC / Bearer) |
+| `POST` | `/api/v1/security/update-token` | Updates master secret Bearer token in persistent storage | **Yes** (HMAC / Bearer) |
 
 *(Note: Legacy unversioned routes `/api/...` remain available as backward-compatible aliases).*
 
@@ -312,7 +313,29 @@ Forces an immediate dual-tier GitHub release check and OTA flash.
 Manually advances the rolling key ratchet forward by one sequence.
 - **Auth**: HMAC Rolling Key or Bearer Token
 
-### 9. `POST /api/v1/system/reboot`
+### 9. `POST /api/v1/security/update-token`
+Updates the static master secret key / Tier 2 Bearer token in wear-leveled flash storage (EEPROM/NVS).
+- **Auth**: HMAC Rolling Key or existing Bearer Token
+- **Payload**:
+```json
+{
+  "token": "MyNewSecureSuperSecretKey2026!"
+}
+```
+- **Response**:
+```json
+{
+  "status": "success",
+  "code": 200,
+  "uptime": 450,
+  "data": {
+    "message": "Master Bearer token updated successfully",
+    "tokenPrefix": "MyNe..."
+  }
+}
+```
+
+### 10. `POST /api/v1/system/reboot`
 Safely restarts the microcontroller.
 - **Auth**: HMAC Rolling Key or Bearer Token
 

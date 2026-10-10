@@ -140,6 +140,7 @@ void RestApi::setupRoutes() {
 
     // Security & Key Ratchet
     _server.on("/api/v1/security/rotate-key", HTTP_POST, handleRotateKey);
+    _server.on("/api/v1/security/update-token", HTTP_POST, handleUpdateToken);
 
     // -----------------------------------------------------------------
     // Backwards-Compatible Aliases
@@ -394,6 +395,51 @@ void RestApi::handleRotateKey() {
         sendStandardResponse(200, data);
     } else {
         sendStandardError(500, "Failed to rotate rolling key");
+    }
+}
+
+void RestApi::handleUpdateToken() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    String newToken = _server.hasArg("token") ? _server.arg("token") : 
+                     (_server.hasArg("new_token") ? _server.arg("new_token") : 
+                     (_server.hasArg("key") ? _server.arg("key") : ""));
+
+    if (newToken.length() == 0 && _server.hasArg("plain")) {
+        String body = _server.arg("plain");
+        auto extractJson = [&](const String& key) -> String {
+            int idx = body.indexOf("\"" + key + "\"");
+            if (idx < 0) return "";
+            int start = body.indexOf(':', idx) + 1;
+            int q1 = body.indexOf('"', start);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+            return "";
+        };
+        newToken = extractJson("token");
+        if (newToken.length() == 0) newToken = extractJson("new_token");
+        if (newToken.length() == 0) newToken = extractJson("newKey");
+        if (newToken.length() == 0) newToken = extractJson("key");
+    }
+
+    newToken.trim();
+    if (newToken.length() < 16) {
+        sendStandardError(400, "Token too short: Must be at least 16 characters for security");
+        return;
+    }
+
+    if (ConfigStore::setMasterSecretKey(newToken)) {
+        String data = "{";
+        data += "\"message\":\"Master Bearer token updated successfully\",";
+        data += "\"tokenPrefix\":\"" + newToken.substring(0, 4) + "...\"";
+        data += "}";
+        sendStandardResponse(200, data);
+    } else {
+        sendStandardError(500, "Failed to persist new master token to storage");
     }
 }
 

@@ -178,6 +178,12 @@ bool ConfigStore::rotateRollingKey() {
     return save();
 }
 
+bool ConfigStore::setMasterSecretKey(const String& newKey) {
+    if (newKey.length() == 0) return false;
+    strncpy(_config.masterSecretKey, newKey.c_str(), sizeof(_config.masterSecretKey) - 1);
+    return save();
+}
+
 bool ConfigStore::setGitHubConfig(const String& org, const String& coreRepo, 
                                   const String& controllerRepo, const String& token) {
     if (org.length() > 0) strncpy(_config.githubOrg, org.c_str(), sizeof(_config.githubOrg) - 1);

@@ -31,6 +31,9 @@ public:
     // Advance the rolling key sequence and update persistent storage
     static bool rotateRollingKey();
 
+    // Update Master Secret Key / Static Bearer Token
+    static bool setMasterSecretKey(const String& newKey);
+
     // Update GitHub target configuration
     static bool setGitHubConfig(const String& org, const String& coreRepo, 
                                 const String& controllerRepo, const String& token);

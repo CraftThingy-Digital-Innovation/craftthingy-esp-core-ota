@@ -35,6 +35,7 @@ private:
     static void handleGitHubConfig();
     static void handleTriggerUpdate();
     static void handleRotateKey();
+    static void handleUpdateToken();
     static void handleReboot();
     static void handleControllerStatus();
     static void handleControllerCommand();

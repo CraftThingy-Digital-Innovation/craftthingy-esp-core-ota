@@ -97,6 +97,10 @@ def main():
     # Rotate Key
     subparsers.add_parser("rotate-key", help="Advance the rolling key ratchet to next sequence")
 
+    # Set Master Bearer Token
+    token_parser = subparsers.add_parser("set-token", help="Update the master Bearer token / secret key")
+    token_parser.add_argument("--new-token", required=True, help="New secret Bearer token (min 16 chars)")
+
     # Controller Commands
     subparsers.add_parser("pump-status", help="Get live water pump / controller telemetry")
     subparsers.add_parser("pump-stop", help="🚨 EMERGENCY INTERRUPT: Stop the pump immediately")
@@ -153,6 +157,13 @@ def main():
         data_block = res.get("data", {}) if isinstance(res.get("data"), dict) else res
         if "newRollingKey" in data_block:
             print(f"\n[!] New Key: {data_block.get('newRollingKey')}")
+
+    elif args.command == "set-token":
+        payload = {"token": args.new_token}
+        res = send_signed_request(args.host, "POST", "/api/v1/security/update-token", args.key, args.seq, payload)
+        print("[+] Token Update Result:")
+        print(json.dumps(res, indent=2))
+        print(f"\n[!] Master Bearer token updated successfully! Use this token for external controllers.")
 
     elif args.command == "pump-status":
         res = send_signed_request(args.host, "GET", "/api/v1/device/status", args.key, args.seq)
