@@ -9,9 +9,12 @@
 ApiServerType RestApi::_server(CRAFT_WEB_PORT);
 
 void RestApi::init() {
-    // Collect security headers for HMAC and Bearer authentication
+#if defined(ESP8266)
+    _server.collectHeaders("X-Signature", "X-Timestamp", "X-Nonce", "X-Sequence", "Authorization", "X-Master-Key");
+#elif defined(ESP32)
     const char* headerKeys[] = {"X-Signature", "X-Timestamp", "X-Nonce", "X-Sequence", "Authorization", "X-Master-Key"};
     _server.collectHeaders(headerKeys, 6);
+#endif
 
     setupRoutes();
     _server.begin();

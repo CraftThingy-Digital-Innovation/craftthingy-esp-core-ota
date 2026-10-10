@@ -10,7 +10,7 @@
 #endif
 #include <DNSServer.h>
 
-enum WiFiState {
+enum CraftWiFiState {
     WIFI_STATE_IDLE,
     WIFI_STATE_CONNECTING,
     WIFI_STATE_CONNECTED,
@@ -33,7 +33,7 @@ public:
     static bool retryStation();
 
     // Check current state
-    static WiFiState getState();
+    static CraftWiFiState getState();
     static bool isConnected();
     static bool isAPMode();
 
@@ -46,7 +46,7 @@ public:
     static String scanNetworksJson();
 
 private:
-    static WiFiState _state;
+    static CraftWiFiState _state;
     static DNSServer _dnsServer;
     static String _apSSID;
     static uint32_t _lastReconnectAttempt;

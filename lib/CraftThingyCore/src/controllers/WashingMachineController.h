@@ -47,6 +47,15 @@ public:
                 digitalWrite(_motorPin, ((millis() / 1000) % 2 == 0) ? HIGH : LOW);
                 if (elapsed >= 15000) {
                     digitalWrite(_motorPin, LOW);
+                    transitionTo(WASHER_RINSING);
+                }
+                break;
+
+            case WASHER_RINSING:
+                digitalWrite(_valvePin, LOW);
+                digitalWrite(_motorPin, ((millis() / 1000) % 2 == 0) ? HIGH : LOW);
+                if (elapsed >= 10000) {
+                    digitalWrite(_motorPin, LOW);
                     transitionTo(WASHER_DRAINING);
                 }
                 break;

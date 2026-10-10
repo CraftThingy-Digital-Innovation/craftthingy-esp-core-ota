@@ -1,7 +1,7 @@
 #include "WiFiManager.h"
 #include "ConfigStore.h"
 
-WiFiState WiFiManager::_state = WIFI_STATE_IDLE;
+CraftWiFiState WiFiManager::_state = WIFI_STATE_IDLE;
 DNSServer WiFiManager::_dnsServer;
 String WiFiManager::_apSSID = "CraftThingy-Setup";
 uint32_t WiFiManager::_lastReconnectAttempt = 0;
@@ -120,7 +120,7 @@ void WiFiManager::loop() {
     }
 }
 
-WiFiState WiFiManager::getState() {
+CraftWiFiState WiFiManager::getState() {
     return _state;
 }
 
