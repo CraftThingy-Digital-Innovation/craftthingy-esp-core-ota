@@ -134,6 +134,8 @@ void RestApi::setupRoutes() {
     // System Telemetry & Maintenance
     _server.on("/api/v1/system/status", HTTP_GET, handleStatus);
     _server.on("/api/v1/system/reboot", HTTP_POST, handleReboot);
+    _server.on("/api/v1/system/name", HTTP_POST, handleSetDeviceName);
+    _server.on("/api/v1/device/name", HTTP_POST, handleSetDeviceName);
     _server.on("/api/v1/ota/check", HTTP_POST, handleTriggerUpdate);
 
     // WiFi Networking & Provisioning
@@ -177,6 +179,7 @@ void RestApi::handleStatus() {
     String data = "{";
     data += "\"system\":{";
     data += "\"status\":\"online\",";
+    data += "\"name\":\"" + String(cfg.deviceName) + "\",";
     data += "\"coreVersion\":\"" + String(CRAFT_CORE_VERSION) + "\",";
     data += "\"boardTarget\":\"" + String(fp.archTag) + "\",";
     data += "\"chip\":\"" + String(fp.chipName) + "\",";
@@ -581,6 +584,39 @@ void RestApi::handleSeedKey() {
         sendStandardResponse(200, data);
     } else {
         sendStandardError(500, "Failed to persist new rolling seed to flash storage");
+    }
+}
+
+void RestApi::handleSetDeviceName() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    String name = _server.hasArg("name") ? _server.arg("name") : "";
+    if (_server.hasArg("plain")) {
+        String body = _server.arg("plain");
+        int idx = body.indexOf("\"name\"");
+        if (idx >= 0) {
+            int start = body.indexOf(':', idx) + 1;
+            int q1 = body.indexOf('"', start);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 >= 0 && q2 > q1) name = body.substring(q1 + 1, q2);
+        }
+    }
+
+    name.trim();
+    if (name.length() == 0 || name.length() > 31) {
+        sendStandardError(400, "Device name must be between 1 and 31 characters");
+        return;
+    }
+
+    if (ConfigStore::setDeviceName(name)) {
+        WiFiManager::setDeviceName(name);
+        sendStandardSuccess("Device name updated to: " + name);
+    } else {
+        sendStandardError(500, "Failed to save device name");
     }
 }
 

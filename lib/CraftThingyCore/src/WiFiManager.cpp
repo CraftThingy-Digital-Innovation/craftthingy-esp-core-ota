@@ -9,11 +9,16 @@ uint8_t WiFiManager::_retryCount = 0;
 bool WiFiManager::_dnsActive = false;
 
 void WiFiManager::init() {
-    String mac = getMacAddress();
-    mac.replace(":", "");
-    String suffix = mac.substring(mac.length() - 4);
-    suffix.toUpperCase();
-    _apSSID = "CraftThingy-" + suffix;
+    DeviceConfig& cfg = ConfigStore::get();
+    if (strlen(cfg.deviceName) > 0 && strcmp(cfg.deviceName, "CraftThingy-Device") != 0) {
+        _apSSID = String(cfg.deviceName);
+    } else {
+        String mac = getMacAddress();
+        mac.replace(":", "");
+        String suffix = mac.substring(mac.length() - 4);
+        suffix.toUpperCase();
+        _apSSID = "CraftThingy-" + suffix;
+    }
 
     WiFi.persistent(false);
     WiFi.disconnect(true);
@@ -28,6 +33,11 @@ bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t max
 
     _state = WIFI_STATE_CONNECTING;
     WiFi.mode(WIFI_STA);
+#if defined(ESP8266)
+    WiFi.hostname(_apSSID);
+#elif defined(ESP32)
+    WiFi.setHostname(_apSSID.c_str());
+#endif
 
     for (uint8_t attempt = 1; attempt <= maxRetries; ++attempt) {
         WiFi.begin(ssid, password);
@@ -166,4 +176,17 @@ String WiFiManager::scanNetworksJson() {
     }
     json += "]";
     return json;
+}
+
+void WiFiManager::setDeviceName(const String& name) {
+    if (name.length() == 0) return;
+    _apSSID = name;
+#if defined(ESP8266)
+    WiFi.hostname(_apSSID);
+#elif defined(ESP32)
+    WiFi.setHostname(_apSSID.c_str());
+#endif
+    if (_state == WIFI_STATE_AP_PORTAL) {
+        WiFi.softAP(_apSSID.c_str());
+    }
 }

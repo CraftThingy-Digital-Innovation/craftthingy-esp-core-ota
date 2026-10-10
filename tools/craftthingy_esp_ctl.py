@@ -118,6 +118,10 @@ def main():
     subparsers.add_parser("pump-auto", help="🔄 RESUME AUTO float-switch mode")
     subparsers.add_parser("pump-reset-safety", help="🛡️ Reset dry-run safety alarm")
 
+    # Set Device Name
+    name_parser = subparsers.add_parser("set-name", help="Change device name and network hostname on the fly")
+    name_parser.add_argument("--name", required=True, help="New device name / hostname (e.g. WaterPump-GroundFloor)")
+
     # Reboot
     subparsers.add_parser("reboot", help="Reboot device")
 
@@ -182,6 +186,12 @@ def main():
         print(json.dumps(res, indent=2))
         print(f"\n[!] Master Secret Key successfully updated in flash storage!")
         print(f"[!] KEEP THIS SAFE: {args.new_master_key}")
+
+    elif args.command == "set-name":
+        payload = {"name": args.name}
+        res = send_signed_request(args.host, "POST", "/api/v1/system/name", args.key, args.seq, payload)
+        print("[+] Set Device Name Result:")
+        print(json.dumps(res, indent=2))
 
     elif args.command == "seed-key":
         payload = {

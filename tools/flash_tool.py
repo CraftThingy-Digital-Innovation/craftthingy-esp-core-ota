@@ -222,14 +222,11 @@ Examples:
             "--baud", args.baud,
         ] + chip_args + [
             "write-flash",
-            "--flash_mode", args.flash_mode,
-            "--flash_size", args.flash_size,
+            "--flash-mode", args.flash_mode,
+            "--flash-size", args.flash_size,
             args.addr,
             args.bin
         ]
-
-        if args.verify:
-            cmd.append("--verify")
 
         res = run_esptool(cmd)
         if res.returncode == 0:

@@ -41,6 +41,7 @@ public:
     static String getAPIPAddress();
     static String getMacAddress();
     static String getApSSID();
+    static void setDeviceName(const String& name);
 
     // Scan nearby networks and return JSON list
     static String scanNetworksJson();

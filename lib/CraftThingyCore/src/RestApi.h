@@ -38,6 +38,7 @@ private:
     static void handleUpdateToken();
     static void handleSeedKey();
     static void handleReboot();
+    static void handleSetDeviceName();
     static void handleControllerStatus();
     static void handleControllerCommand();
     static void handleNotFound();

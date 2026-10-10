@@ -17,6 +17,7 @@ struct DeviceConfig {
     char githubToken[64];
     uint32_t otaIntervalSec;
     bool configured;
+    char deviceName[32];
 };
 
 class ConfigStore {
@@ -46,6 +47,9 @@ public:
 
     // Update Active Role
     static bool setActiveRole(const String& role);
+
+    // Update Device Name / Hostname
+    static bool setDeviceName(const String& name);
 
     // Check if device is configured
     static bool isConfigured();
