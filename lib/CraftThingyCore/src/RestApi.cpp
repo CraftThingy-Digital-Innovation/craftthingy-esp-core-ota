@@ -10,8 +10,8 @@ ApiServerType RestApi::_server(CRAFT_WEB_PORT);
 
 void RestApi::init() {
     // Collect security headers for HMAC and Bearer authentication
-    const char* headerKeys[] = {"X-Signature", "X-Timestamp", "X-Nonce", "X-Sequence", "Authorization"};
-    _server.collectHeaders(headerKeys, 5);
+    const char* headerKeys[] = {"X-Signature", "X-Timestamp", "X-Nonce", "X-Sequence", "Authorization", "X-Master-Key"};
+    _server.collectHeaders(headerKeys, 6);
 
     setupRoutes();
     _server.begin();
@@ -407,24 +407,70 @@ void RestApi::handleUpdateToken() {
         return;
     }
 
+    DeviceConfig& cfg = ConfigStore::get();
+
+    // -------------------------------------------------------------
+    // Master Key Protection Gate:
+    // To change the Master Key, caller MUST prove ownership of the
+    // CURRENT Master Secret Key! (Prevents a daily rolling key from
+    // hijacking the root administrator master key).
+    // -------------------------------------------------------------
+    String currentMaster = _server.header("X-Master-Key");
+    if (currentMaster.length() == 0 && _server.hasArg("current_master_key")) {
+        currentMaster = _server.arg("current_master_key");
+    }
+    if (currentMaster.length() == 0 && _server.hasArg("current_key")) {
+        currentMaster = _server.arg("current_key");
+    }
+
+    String body = _server.hasArg("plain") ? _server.arg("plain") : "";
+    auto extractJson = [&](const String& key) -> String {
+        int idx = body.indexOf("\"" + key + "\"");
+        if (idx < 0) return "";
+        int start = body.indexOf(':', idx) + 1;
+        int q1 = body.indexOf('"', start);
+        int q2 = body.indexOf('"', q1 + 1);
+        if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+        return "";
+    };
+
+    if (currentMaster.length() == 0 && body.length() > 0) {
+        currentMaster = extractJson("current_master_key");
+        if (currentMaster.length() == 0) currentMaster = extractJson("currentMasterKey");
+        if (currentMaster.length() == 0) currentMaster = extractJson("current_key");
+    }
+
+    bool masterVerified = false;
+    if (currentMaster.length() > 0 && CraftThingyCrypto::constantTimeEquals(currentMaster, String(cfg.masterSecretKey))) {
+        masterVerified = true;
+    } else if (authMethod == "hmac_master_key") {
+        masterVerified = true;
+    } else {
+        String authHeader = _server.header("Authorization");
+        if (authHeader.startsWith("Bearer ") || authHeader.startsWith("bearer ")) {
+            String token = authHeader.substring(7);
+            token.trim();
+            if (CraftThingyCrypto::constantTimeEquals(token, String(cfg.masterSecretKey))) {
+                masterVerified = true;
+            }
+        }
+    }
+
+    if (!masterVerified) {
+        sendStandardError(403, "Forbidden: Changing Master Secret Key requires proof of CURRENT Master Secret Key ('current_master_key' or X-Master-Key header)");
+        return;
+    }
+
     String newToken = _server.hasArg("token") ? _server.arg("token") : 
                      (_server.hasArg("new_token") ? _server.arg("new_token") : 
-                     (_server.hasArg("key") ? _server.arg("key") : ""));
+                     (_server.hasArg("key") ? _server.arg("key") : 
+                     (_server.hasArg("new_master_key") ? _server.arg("new_master_key") : "")));
 
-    if (newToken.length() == 0 && _server.hasArg("plain")) {
-        String body = _server.arg("plain");
-        auto extractJson = [&](const String& key) -> String {
-            int idx = body.indexOf("\"" + key + "\"");
-            if (idx < 0) return "";
-            int start = body.indexOf(':', idx) + 1;
-            int q1 = body.indexOf('"', start);
-            int q2 = body.indexOf('"', q1 + 1);
-            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
-            return "";
-        };
+    if (newToken.length() == 0 && body.length() > 0) {
         newToken = extractJson("token");
         if (newToken.length() == 0) newToken = extractJson("new_token");
         if (newToken.length() == 0) newToken = extractJson("newKey");
+        if (newToken.length() == 0) newToken = extractJson("new_master_key");
         if (newToken.length() == 0) newToken = extractJson("key");
     }
 
@@ -436,7 +482,7 @@ void RestApi::handleUpdateToken() {
 
     if (ConfigStore::setMasterSecretKey(newToken)) {
         String data = "{";
-        data += "\"message\":\"Master Bearer token updated successfully\",";
+        data += "\"message\":\"Master Secret Key updated successfully\",";
         data += "\"tokenPrefix\":\"" + newToken.substring(0, 4) + "...\"";
         data += "}";
         sendStandardResponse(200, data);
@@ -452,6 +498,7 @@ void RestApi::handleSeedKey() {
         return;
     }
 
+    DeviceConfig& cfg = ConfigStore::get();
     String newSeed = _server.hasArg("seed") ? _server.arg("seed") : 
                     (_server.hasArg("key") ? _server.arg("key") : "");
     String seqStr = _server.hasArg("sequence") ? _server.arg("sequence") : 
@@ -461,23 +508,54 @@ void RestApi::handleSeedKey() {
         syncMaster = (_server.arg("sync_master") == "true" || _server.arg("sync_master") == "1");
     }
 
-    if (newSeed.length() == 0 && _server.hasArg("plain")) {
-        String body = _server.arg("plain");
-        auto extractJson = [&](const String& key) -> String {
-            int idx = body.indexOf("\"" + key + "\"");
-            if (idx < 0) return "";
-            int start = body.indexOf(':', idx) + 1;
-            int q1 = body.indexOf('"', start);
-            int q2 = body.indexOf('"', q1 + 1);
-            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
-            return "";
-        };
+    String body = _server.hasArg("plain") ? _server.arg("plain") : "";
+    auto extractJson = [&](const String& key) -> String {
+        int idx = body.indexOf("\"" + key + "\"");
+        if (idx < 0) return "";
+        int start = body.indexOf(':', idx) + 1;
+        int q1 = body.indexOf('"', start);
+        int q2 = body.indexOf('"', q1 + 1);
+        if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+        return "";
+    };
+
+    if (newSeed.length() == 0 && body.length() > 0) {
         newSeed = extractJson("seed");
         if (newSeed.length() == 0) newSeed = extractJson("key");
         String s = extractJson("sequence");
         if (s.length() > 0) seqStr = s;
         if (body.indexOf("\"sync_master\":false") >= 0 || body.indexOf("\"syncMaster\":false") >= 0) {
             syncMaster = false;
+        }
+    }
+
+    // Guard Master key sync: Only allow syncing master if current master key is verified
+    if (syncMaster) {
+        String currentMaster = _server.header("X-Master-Key");
+        if (currentMaster.length() == 0 && _server.hasArg("current_master_key")) {
+            currentMaster = _server.arg("current_master_key");
+        }
+        if (currentMaster.length() == 0 && body.length() > 0) {
+            currentMaster = extractJson("current_master_key");
+            if (currentMaster.length() == 0) currentMaster = extractJson("currentMasterKey");
+        }
+        bool masterVerified = false;
+        if (currentMaster.length() > 0 && CraftThingyCrypto::constantTimeEquals(currentMaster, String(cfg.masterSecretKey))) {
+            masterVerified = true;
+        } else if (authMethod == "hmac_master_key") {
+            masterVerified = true;
+        } else {
+            String authHeader = _server.header("Authorization");
+            if (authHeader.startsWith("Bearer ") || authHeader.startsWith("bearer ")) {
+                String token = authHeader.substring(7);
+                token.trim();
+                if (CraftThingyCrypto::constantTimeEquals(token, String(cfg.masterSecretKey))) {
+                    masterVerified = true;
+                }
+            }
+        }
+        if (!masterVerified) {
+            syncMaster = false; // Gracefully downgrade syncMaster so rolling ratchet re-seeds safely
         }
     }
 

@@ -169,14 +169,14 @@ def main():
             print(f"\n[!] New Key: {data_block.get('newRollingKey')}")
 
     elif args.command == "set-token":
-        payload = {"token": args.new_token}
+        payload = {"token": args.new_token, "current_master_key": args.key}
         res = send_signed_request(args.host, "POST", "/api/v1/security/update-token", args.key, args.seq, payload)
         print("[+] Token Update Result:")
         print(json.dumps(res, indent=2))
         print(f"\n[!] Master Bearer token updated successfully! Use this token for external controllers.")
 
     elif args.command == "set-master-key":
-        payload = {"token": args.new_master_key}
+        payload = {"token": args.new_master_key, "current_master_key": args.key}
         res = send_signed_request(args.host, "POST", "/api/v1/security/update-master-key", args.key, args.seq, payload)
         print("[+] Master Secret Key Update Result:")
         print(json.dumps(res, indent=2))
