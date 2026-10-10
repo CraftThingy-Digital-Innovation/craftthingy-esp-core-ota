@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CraftThingy ESP Device Manager</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --success: #22c55e;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+    .container { width: 100%; max-width: 720px; }
+    header { margin-bottom: 24px; text-align: center; }
+    header h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 6px; }
+    header p { color: var(--text-dim); font-size: 0.95rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .card h2 { font-size: 1.2rem; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 6px; font-weight: 500; }
+    input, select {
+      width: 100%;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .btn-group { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+    button {
+      flex: 1;
+      min-width: 130px;
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary { background: #334155; color: var(--text); }
+    button.secondary:hover { background: #475569; }
+    button.danger { background: var(--danger); color: #fff; }
+    .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem; }
+    .status-item { background: #0b1120; padding: 10px; border-radius: 6px; }
+    .status-item .label { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
+    .status-item .val { font-weight: 600; margin-top: 2px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+    .badge-online { background: rgba(34,197,94,0.2); color: var(--success); }
+    .log-box {
+      background: #020617;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #38bdf8;
+      max-height: 140px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>CraftThingy ESP Manager</h1>
+    <p>Zero-Install Browser Config & HMAC-SHA256 Rolling Key Controller</p>
+  </header>
+
+  <!-- Connection & Key Card -->
+  <div class="card">
+    <h2>1. Connection & Security Key</h2>
+    <div class="form-group">
+      <label>ESP Device Address (IP or Hostname)</label>
+      <input type="text" id="espHost" value="192.168.4.1">
+    </div>
+    <div class="form-group">
+      <label>Current Secret / Rolling Key</label>
+      <input type="text" id="secretKey" value="a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff00">
+    </div>
+    <div class="btn-group">
+      <button onclick="fetchStatus()">Refresh Status</button>
+      <button class="secondary" onclick="rotateKey()">Rotate Key Ratchet</button>
+    </div>
+  </div>
+
+  <!-- Device Status Card -->
+  <div class="card">
+    <h2>2. Live Device Status</h2>
+    <div class="status-grid" id="statusGrid">
+      <div class="status-item"><div class="label">Chip Target</div><div class="val" id="valChip">--</div></div>
+      <div class="status-item"><div class="label">Flash Size</div><div class="val" id="valFlash">--</div></div>
+      <div class="status-item"><div class="label">Core Version</div><div class="val" id="valCoreVer">--</div></div>
+      <div class="status-item"><div class="label">Active Role</div><div class="val" id="valRole">--</div></div>
+      <div class="status-item"><div class="label">WiFi Status</div><div class="val" id="valWifi">--</div></div>
+      <div class="status-item"><div class="label">IP Address</div><div class="val" id="valIp">--</div></div>
+      <div class="status-item"><div class="label">Rolling Sequence</div><div class="val" id="valSeq">--</div></div>
+      <div class="status-item"><div class="label">OTA Status</div><div class="val" id="valOta">--</div></div>
+    </div>
+  </div>
+
+  <!-- WiFi Configuration Card -->
+  <div class="card">
+    <h2>3. WiFi Provisioning</h2>
+    <div class="form-group">
+      <label>Nearby SSIDs</label>
+      <div style="display:flex; gap:8px;">
+        <select id="scannedSsids" onchange="document.getElementById('wifiSsid').value = this.value">
+          <option value="">-- Click 'Scan WiFi' to find networks --</option>
+        </select>
+        <button style="flex:0 0 120px;" onclick="scanWiFi()">Scan WiFi</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>WiFi SSID</label>
+      <input type="text" id="wifiSsid" placeholder="Network Name">
+    </div>
+    <div class="form-group">
+      <label>WiFi Password</label>
+      <input type="password" id="wifiPass" placeholder="Network Password">
+    </div>
+    <div class="btn-group">
+      <button onclick="saveWiFi()">Save & Connect WiFi</button>
+    </div>
+  </div>
+
+  <!-- GitHub OTA Configuration Card -->
+  <div class="card">
+    <h2>4. GitHub OTA Targets</h2>
+    <div class="form-group">
+      <label>GitHub Organization</label>
+      <input type="text" id="ghOrg" value="CraftThingy-Digital-Innovation">
+    </div>
+    <div class="form-group">
+      <label>Core OTA Repo</label>
+      <input type="text" id="ghCore" value="craftthingy-esp-core-ota">
+    </div>
+    <div class="form-group">
+      <label>Controller Application Repo</label>
+      <input type="text" id="ghCtrl" value="craftthingy-esp-water-pump">
+    </div>
+    <div class="form-group">
+      <label>Device Role</label>
+      <select id="deviceRole">
+        <option value="water_pump">Water Pump (craftthingy-esp-water-pump)</option>
+        <option value="washing_machine">Washing Machine (craftthingy-esp-washing-machine)</option>
+        <option value="core">Standalone Core Updater</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>GitHub Token (Optional, for private repos)</label>
+      <input type="password" id="ghToken" placeholder="ghp_...">
+    </div>
+    <div class="btn-group">
+      <button onclick="saveGitHub()">Save & Ratchet Key</button>
+      <button class="secondary" onclick="triggerUpdate()">Check OTA Now</button>
+      <button class="danger" onclick="rebootDevice()">Reboot ESP</button>
+    </div>
+  </div>
+
+  <!-- Activity Console -->
+  <div class="card">
+    <h2>Activity Console</h2>
+    <div class="log-box" id="logBox">[Ready] Open this file in your browser while connected to ESP WiFi.</div>
+  </div>
+</div>
+
+<script>
+  let rollingSeq = 1;
+
+  function log(msg) {
+    const box = document.getElementById('logBox');
+    const time = new Date().toLocaleTimeString();
+    box.textContent = `[${time}] ${msg}\n` + box.textContent;
+  }
+
+  // Pure in-browser WebCrypto HMAC-SHA256 signature calculation
+  async function computeHmacSha256(keyStr, messageStr) {
+    const enc = new TextEncoder();
+    const keyData = enc.encode(keyStr);
+    const msgData = enc.encode(messageStr);
+
+    const cryptoKey = await window.crypto.subtle.importKey(
+      "raw", keyData, { name: "HMAC", hash: { name: "SHA-256" } }, false, ["sign"]
+    );
+    const sigBuf = await window.crypto.subtle.sign("HMAC", cryptoKey, msgData);
+    const hashArray = Array.from(new Uint8Array(sigBuf));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function randomHex(bytes) {
+    const arr = new Uint8Array(bytes);
+    window.crypto.getRandomValues(arr);
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function apiRequest(method, path, bodyObj = null) {
+    const host = document.getElementById('espHost').value.trim();
+    const key = document.getElementById('secretKey').value.trim();
+    const url = `http://${host}${path}`;
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const nonce = randomHex(8);
+    const bodyStr = bodyObj ? JSON.stringify(bodyObj) : "";
+
+    const payloadToSign = `${method}\n${path}\n${timestamp}\n${nonce}\n${bodyStr}`;
+    const signature = await computeHmacSha256(key, payloadToSign);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Signature': signature,
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Sequence': rollingSeq.toString()
+    };
+
+    const options = { method, headers };
+    if (bodyStr) options.body = bodyStr;
+
+    log(`--> ${method} ${path}`);
+    const res = await fetch(url, options);
+    const json = await res.json();
+    log(`<-- Response: ${JSON.stringify(json)}`);
+    return json;
+  }
+
+  async function fetchStatus() {
+    try {
+      const host = document.getElementById('espHost').value.trim();
+      const res = await fetch(`http://${host}/api/status`);
+      const data = await res.json();
+
+      document.getElementById('valChip').textContent = `${data.chip} (${data.boardTarget})`;
+      document.getElementById('valFlash').textContent = `${(data.flashBytes / 1024 / 1024).toFixed(1)} MB`;
+      document.getElementById('valCoreVer').textContent = data.coreVersion;
+      document.getElementById('valRole').textContent = data.activeRole;
+      document.getElementById('valWifi').textContent = data.wifiState;
+      document.getElementById('valIp').textContent = data.ip;
+      document.getElementById('valSeq').textContent = data.rollingSequence;
+      document.getElementById('valOta').textContent = data.otaStatus;
+
+      rollingSeq = data.rollingSequence + 1;
+      log(`Status updated successfully. ESP IP: ${data.ip}`);
+    } catch (e) {
+      log(`Error fetching status: ${e.message}`);
+    }
+  }
+
+  async function scanWiFi() {
+    try {
+      log("Scanning nearby networks...");
+      const host = document.getElementById('espHost').value.trim();
+      const res = await fetch(`http://${host}/api/wifi/scan`);
+      const networks = await res.json();
+
+      const sel = document.getElementById('scannedSsids');
+      sel.innerHTML = '<option value="">-- Select Detected SSID --</option>';
+      networks.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n.ssid;
+        opt.textContent = `${n.ssid} (${n.rssi} dBm)`;
+        sel.appendChild(opt);
+      });
+      log(`Found ${networks.length} networks.`);
+    } catch (e) {
+      log(`WiFi scan failed: ${e.message}`);
+    }
+  }
+
+  async function saveWiFi() {
+    try {
+      const ssid = document.getElementById('wifiSsid').value.trim();
+      const pass = document.getElementById('wifiPass').value;
+      if (!ssid) { alert("Please enter SSID"); return; }
+
+      await apiRequest('POST', '/api/wifi', { ssid, pass });
+      log("WiFi credentials sent! ESP is connecting in background.");
+    } catch (e) {
+      log(`Error saving WiFi: ${e.message}`);
+    }
+  }
+
+  async function saveGitHub() {
+    try {
+      const org = document.getElementById('ghOrg').value.trim();
+      const core_repo = document.getElementById('ghCore').value.trim();
+      const controller_repo = document.getElementById('ghCtrl').value.trim();
+      const role = document.getElementById('deviceRole').value;
+      const token = document.getElementById('ghToken').value.trim();
+
+      const res = await apiRequest('POST', '/api/github', { org, core_repo, controller_repo, role, token });
+      if (res.newRollingKey) {
+        document.getElementById('secretKey').value = res.newRollingKey;
+        log(`Key ratcheted! New key: ${res.newRollingKey}`);
+      }
+    } catch (e) {
+      log(`Error saving GitHub settings: ${e.message}`);
+    }
+  }
+
+  async function rotateKey() {
+    try {
+      const res = await apiRequest('POST', '/api/key/rotate');
+      if (res.newRollingKey) {
+        document.getElementById('secretKey').value = res.newRollingKey;
+        log(`Key advanced manually! New key: ${res.newRollingKey}`);
+      }
+    } catch (e) {
+      log(`Error rotating key: ${e.message}`);
+    }
+  }
+
+  async function triggerUpdate() {
+    try {
+      await apiRequest('POST', '/api/update');
+      log("OTA update check triggered!");
+    } catch (e) {
+      log(`Error triggering update: ${e.message}`);
+    }
+  }
+
+  async function rebootDevice() {
+    if (!confirm("Are you sure you want to reboot the ESP?")) return;
+    try {
+      await apiRequest('POST', '/api/reboot');
+      log("Reboot command sent.");
+    } catch (e) {
+      log(`Reboot error: ${e.message}`);
+    }
+  }
+
+  window.onload = () => {
+    fetchStatus();
+  };
+</script>
+</body>
+</html>
