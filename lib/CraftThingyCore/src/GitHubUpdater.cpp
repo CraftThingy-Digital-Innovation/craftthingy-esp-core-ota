@@ -424,7 +424,7 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
         size_t written = 0;
         uint32_t lastDataTime = millis();
 
-        while (client.connected() && written < contentLength) {
+        while ((client.connected() || client.available() > 0) && written < contentLength) {
             size_t available = client.available();
             if (available > 0) {
                 size_t toRead = available < sizeof(buffer) ? available : sizeof(buffer);
