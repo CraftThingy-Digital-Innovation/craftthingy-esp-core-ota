@@ -427,11 +427,42 @@
 
     <!-- 1. Dedicated Water Pump Section -->
     <div id="sectionWaterPump">
-      <div class="status-grid" style="margin-bottom:16px;">
-        <div class="status-item"><div class="label">Pump Actuator / Relay</div><div class="val" id="ctrlRunning" style="color:#22c55e;">STOPPED</div></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; background:#0b1120; padding:8px 12px; border-radius:8px; border:1px solid var(--border);">
+        <div style="font-size:0.82rem; color:var(--text-dim);">
+          Hardware Schema: <strong id="pumpHwSchema" style="color:#c084fc;">PROBING...</strong>
+          <span id="pumpRiseTime" style="font-family:monospace; margin-left:6px; font-size:0.75rem; color:#94a3b8;"></span>
+        </div>
+        <span id="pzemStatusBadge" class="badge" style="background:rgba(168,85,247,0.18); color:#c084fc;">PZEM-004T</span>
+      </div>
+
+      <div class="status-grid" style="margin-bottom:14px;">
+        <div class="status-item"><div class="label">Pump Relay</div><div class="val" id="ctrlRunning" style="color:#22c55e;">STOPPED</div></div>
         <div class="status-item"><div class="label">Control Mode</div><div class="val" id="ctrlMode">AUTO</div></div>
         <div class="status-item"><div class="label">Water Float Sensor</div><div class="val" id="ctrlSensor">IDLE</div></div>
         <div class="status-item"><div class="label">Run Duration</div><div class="val" id="ctrlDuration">0s</div></div>
+      </div>
+
+      <!-- Live PZEM-004T Electrical Instrumentation -->
+      <div id="pzemTelemetryBox" style="background:#0b1120; border:1px solid rgba(168,85,247,0.25); border-radius:10px; padding:12px; margin-bottom:14px;">
+        <div style="font-size:0.8rem; font-weight:700; color:#c084fc; margin-bottom:10px; display:flex; justify-content:space-between;">
+          <span>⚡ Live PZEM-004T Electrical Readouts</span>
+          <span id="pzemAcAlert" style="color:#22c55e; font-size:0.75rem;">AC 220V OK</span>
+        </div>
+        <div class="status-grid" style="margin-bottom:10px;">
+          <div class="status-item"><div class="label">AC Voltage</div><div class="val" id="pzemVolt">-- V <span id="pzemFreq" style="font-size:0.75rem; color:var(--text-dim);"></span></div></div>
+          <div class="status-item"><div class="label">Current (RMS)</div><div class="val" id="pzemCurrent">-- A</div></div>
+          <div class="status-item"><div class="label">Active Power</div><div class="val" id="pzemPower">-- W <span id="pzemPf" style="font-size:0.75rem; color:var(--text-dim);"></span></div></div>
+          <div class="status-item"><div class="label">Accumulated Energy</div><div class="val" id="pzemEnergy">-- kWh</div></div>
+        </div>
+        <div style="margin-top:8px;">
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; margin-bottom:4px;">
+            <span style="color:var(--text-dim);">House Power Load (1300W Budget)</span>
+            <span id="pzemHousePct" style="color:var(--accent); font-weight:700;">0%</span>
+          </div>
+          <div style="width:100%; height:7px; background:#1e293b; border-radius:99px; overflow:hidden;">
+            <div id="pzemHouseBar" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #10b981, #f59e0b); transition:width 0.5s;"></div>
+          </div>
+        </div>
       </div>
 
       <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:12px;">
@@ -442,6 +473,7 @@
         <button style="background:#16a34a; color:#fff;" onclick="sendControllerCommand('start')">▶️ FORCE PUMP ON</button>
         <button class="secondary" onclick="sendControllerCommand('auto')">🔄 RESUME AUTO</button>
         <button class="secondary" onclick="sendControllerCommand('reset_safety')">🛡️ RESET ALARM</button>
+        <button class="secondary" onclick="sendControllerCommand('reprobe')">⚡ RE-PROBE HW</button>
       </div>
     </div>
 
@@ -713,9 +745,47 @@
 
           if (ctrl.tankDemandsFill !== undefined) {
             document.getElementById('ctrlSensor').textContent = ctrl.tankDemandsFill ? "LOW (FILL REQUIRED)" : "FULL / NORMAL";
+            document.getElementById('ctrlSensor').style.color = ctrl.tankDemandsFill ? "#f59e0b" : "#22c55e";
           }
           if (ctrl.runDurationSec !== undefined) {
             document.getElementById('ctrlDuration').textContent = `${ctrl.runDurationSec}s`;
+          }
+
+          // Hardware Schema Auto-detection
+          if (ctrl.hardwareSchema) {
+            const sName = ctrl.hardwareSchema.toUpperCase().replace('_', ' ');
+            document.getElementById('pumpHwSchema').textContent = sName;
+            document.getElementById('pumpRiseTime').textContent = ctrl.riseTimeUs !== undefined ? `(${ctrl.riseTimeUs} µs rise)` : '';
+            const pzemBadge = document.getElementById('pzemStatusBadge');
+            pzemBadge.textContent = ctrl.hasPzem ? (ctrl.pzemOnline ? 'PZEM ONLINE' : 'PZEM OFFLINE') : 'LEGACY WIRING';
+            pzemBadge.style.color = ctrl.hasPzem ? (ctrl.pzemOnline ? '#22c55e' : '#f43f5e') : '#94a3b8';
+          }
+
+          // PZEM-004T Electrical Readouts
+          const pzemBox = document.getElementById('pzemTelemetryBox');
+          if (pzemBox) {
+            pzemBox.style.opacity = ctrl.hasPzem ? '1' : '0.4';
+            document.getElementById('pzemVolt').childNodes[0].nodeValue = `${(ctrl.voltage || 0).toFixed(1)} V `;
+            document.getElementById('pzemFreq').textContent = `(${(ctrl.frequency || 50).toFixed(1)} Hz)`;
+            document.getElementById('pzemCurrent').textContent = `${(ctrl.current || 0).toFixed(3)} A`;
+            const pwr = ctrl.power || 0;
+            document.getElementById('pzemPower').childNodes[0].nodeValue = `${pwr.toFixed(1)} W `;
+            document.getElementById('pzemPf').textContent = `(PF: ${(ctrl.powerFactor || 0).toFixed(2)})`;
+            document.getElementById('pzemEnergy').textContent = `${(ctrl.energy || 0).toFixed(3)} kWh`;
+
+            // 1300W House Budget Bar
+            const pct = Math.min(100, Math.round((pwr / 1300) * 100));
+            document.getElementById('pzemHouseBar').style.width = `${pct}%`;
+            document.getElementById('pzemHousePct').textContent = `${pct}% (${pwr.toFixed(0)}W / 1300W)`;
+
+            const alertEl = document.getElementById('pzemAcAlert');
+            if (ctrl.acPowerAlert) {
+              alertEl.textContent = '⚠️ AC MAINS LOST';
+              alertEl.style.color = '#ef4444';
+            } else {
+              alertEl.textContent = 'AC 220V OK';
+              alertEl.style.color = '#22c55e';
+            }
           }
         }
       } else if (currentRole === 'washing_machine') {
