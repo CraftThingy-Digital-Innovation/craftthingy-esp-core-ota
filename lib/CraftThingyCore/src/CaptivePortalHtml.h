@@ -6,21 +6,19 @@ static const char CAPTIVE_PORTAL_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>CraftThingy Water Pump & Energy Monitor</title>
+<title>CraftThingy Core OTA & Software Switcher</title>
 <style>
 :root{
   --bg:#070b14;
   --surface:#0f172a;
-  --surface-glass:rgba(15,23,42,0.82);
+  --surface-glass:rgba(15,23,42,0.85);
   --card-border:rgba(255,255,255,0.08);
-  --card-border-glow:rgba(56,189,248,0.25);
   --cyan:#38bdf8;
   --cyan-dark:#0284c7;
   --emerald:#10b981;
-  --emerald-dark:#059669;
   --amber:#f59e0b;
   --rose:#f43f5e;
-  --violet:#a855f7;
+  --purple:#a855f7;
   --text-main:#f8fafc;
   --text-muted:#94a3b8;
   --text-dim:#64748b;
@@ -30,7 +28,7 @@ body{
   font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   background:radial-gradient(ellipse at top,#0f1d36 0%,#070b14 70%);
   color:var(--text-main);
-  padding:16px 12px 32px 12px;
+  padding:16px 12px 36px 12px;
   min-height:100vh;
   display:flex;
   flex-direction:column;
@@ -38,18 +36,17 @@ body{
 }
 .app-container{
   width:100%;
-  max-width:480px;
+  max-width:500px;
   display:flex;
   flex-direction:column;
   gap:16px;
 }
-/* Glassmorphism Card Base */
 .card{
   background:var(--surface-glass);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
   border:1px solid var(--card-border);
-  border-radius:18px;
+  border-radius:16px;
   padding:20px;
   box-shadow:0 12px 32px rgba(0,0,0,0.5);
   position:relative;
@@ -61,7 +58,17 @@ body{
   top:0;left:0;right:0;height:1px;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);
 }
-/* Top App Header */
+.card h2{
+  font-size:1.05rem;
+  font-weight:700;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:14px;
+  padding-bottom:8px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+}
 .header{
   display:flex;
   justify-content:space-between;
@@ -74,23 +81,23 @@ body{
   gap:10px;
 }
 .brand-icon{
-  width:36px;height:36px;
+  width:38px;height:38px;
   border-radius:10px;
   background:linear-gradient(135deg,#0284c7,#38bdf8);
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 0 16px rgba(56,189,248,0.4);
 }
-.brand-icon svg{width:20px;height:20px;fill:#fff}
-.brand-text h1{font-size:1.15rem;font-weight:700;letter-spacing:-0.3px;color:#fff}
+.brand-icon svg{width:22px;height:22px;fill:#fff}
+.brand-text h1{font-size:1.2rem;font-weight:700;color:#fff}
 .brand-text p{font-size:0.75rem;color:var(--text-muted)}
 .live-pill{
   display:inline-flex;
   align-items:center;
   gap:6px;
-  padding:4px 10px;
+  padding:5px 12px;
   border-radius:99px;
-  font-size:0.72rem;
-  font-weight:600;
+  font-size:0.74rem;
+  font-weight:700;
   background:rgba(16,185,129,0.15);
   border:1px solid rgba(16,185,129,0.3);
   color:#34d399;
@@ -107,286 +114,70 @@ body{
   box-shadow:0 0 8px #10b981;
   animation:pulse 1.8s infinite;
 }
-.live-pill.ap-mode .pulse-dot{
-  background:#f59e0b;
-  box-shadow:0 0 8px #f59e0b;
-}
-@keyframes pulse{
-  0%,100%{opacity:1;transform:scale(1)}
-  50%{opacity:0.3;transform:scale(0.8)}
-}
-/* Schema & Info Sub-bar */
-.schema-bar{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  background:rgba(11,17,32,0.6);
-  border:1px solid rgba(255,255,255,0.05);
-  border-radius:12px;
-  padding:8px 14px;
-  font-size:0.78rem;
-}
-.badge{
-  display:inline-block;
-  padding:3px 8px;
-  border-radius:6px;
-  font-size:0.7rem;
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:0.4px;
-}
-.badge-pzem{background:rgba(168,85,247,0.18);border:1px solid rgba(168,85,247,0.4);color:#c084fc}
-.badge-legacy{background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.3);color:#cbd5e1}
+.live-pill.ap-mode .pulse-dot{background:#f59e0b;box-shadow:0 0 8px #f59e0b}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 
-/* Hero Section: Visual Tank + Pump Card */
-.hero-tank{
-  display:grid;
-  grid-template-columns:120px 1fr;
-  gap:18px;
-  align-items:center;
-}
-.tank-visual-wrap{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:8px;
-}
-.tank-visual{
-  width:100px;
-  height:140px;
-  border:3px solid rgba(56,189,248,0.35);
-  border-radius:14px;
-  position:relative;
-  background:rgba(11,17,32,0.8);
-  overflow:hidden;
-  box-shadow:inset 0 0 16px rgba(0,0,0,0.6);
-}
-.tank-water{
-  position:absolute;
-  bottom:0;left:0;right:0;
-  height:40%;
-  background:linear-gradient(180deg,#38bdf8 0%,#0369a1 100%);
-  transition:height 0.8s cubic-bezier(0.4,0,0.2,1);
-}
-.tank-water.filling{
-  background:linear-gradient(180deg,#34d399 0%,#047857 100%);
-}
-.tank-water::before{
-  content:'';
-  position:absolute;
-  top:-8px;left:-50%;right:-50%;height:16px;
-  background:radial-gradient(circle,rgba(255,255,255,0.4) 20%,transparent 60%);
-  animation:wave 2.5s infinite linear;
-}
-@keyframes wave{
-  0%{transform:translateX(0)}
-  100%{transform:translateX(50%)}
-}
-.tank-mark{
-  position:absolute;right:4px;
-  font-size:0.6rem;color:var(--text-dim);
-  font-family:monospace;
-}
-.tank-mark.top{top:8px}
-.tank-mark.mid{top:64px}
-.tank-mark.bot{bottom:8px}
-.tank-label{
-  font-size:0.75rem;
-  font-weight:600;
-  text-align:center;
-  color:var(--text-muted);
-}
-
-/* Pump Status Column */
-.pump-info{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-.pump-status-badge{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 12px;
-  border-radius:10px;
-  font-size:0.85rem;
-  font-weight:700;
-  letter-spacing:0.3px;
-  background:rgba(148,163,184,0.12);
-  color:var(--text-muted);
-  border:1px solid rgba(148,163,184,0.2);
-  width:fit-content;
-}
-.pump-status-badge.active{
-  background:rgba(16,185,129,0.18);
-  border-color:rgba(16,185,129,0.5);
-  color:#34d399;
-  box-shadow:0 0 16px rgba(16,185,129,0.3);
-}
-.pump-status-badge.interrupted{
-  background:rgba(244,63,94,0.18);
-  border-color:rgba(244,63,94,0.5);
-  color:#f43f5e;
-}
-.impeller{
-  width:16px;height:16px;
-  fill:currentColor;
-}
-.pump-status-badge.active .impeller{
-  animation:spin 1.2s infinite linear;
-}
-@keyframes spin{
-  100%{transform:rotate(360deg)}
-}
-.timer-text{
-  font-size:1.35rem;
-  font-weight:800;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  color:#fff;
-  letter-spacing:-0.5px;
-}
-.float-status{
-  font-size:0.8rem;
-  display:flex;
-  align-items:center;
-  gap:6px;
-  color:var(--text-muted);
-}
-.float-status span{
-  font-weight:600;
-  color:var(--text-main);
-}
-.alarm-banner{
-  background:rgba(244,63,94,0.15);
-  border:1px solid rgba(244,63,94,0.4);
-  color:#fda4af;
-  border-radius:10px;
-  padding:8px 12px;
-  font-size:0.75rem;
-  font-weight:600;
-  margin-top:6px;
-  display:none;
-}
-.alarm-banner.visible{display:block}
-
-/* Action Controls Grid */
-.control-actions{
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:8px;
-  margin-top:14px;
-}
-.btn-cmd{
-  padding:12px 6px;
-  border:none;
-  border-radius:10px;
-  font-size:0.82rem;
-  font-weight:700;
-  cursor:pointer;
-  transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:4px;
-}
-.btn-cmd:active{transform:scale(0.96)}
-.btn-auto{
-  background:linear-gradient(135deg,rgba(16,185,129,0.25),rgba(5,150,105,0.35));
-  border:1px solid rgba(16,185,129,0.4);
-  color:#6ee7b7;
-}
-.btn-auto:hover{background:rgba(16,185,129,0.4);color:#fff}
-.btn-start{
-  background:linear-gradient(135deg,rgba(56,189,248,0.25),rgba(2,132,199,0.35));
-  border:1px solid rgba(56,189,248,0.4);
-  color:#7dd3fc;
-}
-.btn-start:hover{background:rgba(56,189,248,0.4);color:#fff}
-.btn-stop{
-  background:linear-gradient(135deg,rgba(244,63,94,0.25),rgba(225,29,72,0.35));
-  border:1px solid rgba(244,63,94,0.4);
-  color:#fda4af;
-}
-.btn-stop:hover{background:rgba(244,63,94,0.4);color:#fff}
-
-/* PZEM Electrical Telemetry Section */
-.telemetry-hd{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:14px;
-}
-.telemetry-hd h2{
-  font-size:0.95rem;
-  font-weight:700;
-  color:#fff;
-  display:flex;align-items:center;gap:6px;
-}
-.telemetry-grid{
+/* Status Grid */
+.status-grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:10px;
+  font-size:0.82rem;
 }
-.gauge-card{
+.status-item{
   background:rgba(11,17,32,0.7);
-  border:1px solid rgba(255,255,255,0.06);
-  border-radius:14px;
-  padding:12px;
-  display:flex;
-  flex-direction:column;
-  gap:4px;
+  border:1px solid rgba(255,255,255,0.05);
+  padding:10px 12px;
+  border-radius:10px;
 }
-.gauge-label{
+.status-label{
+  color:var(--text-dim);
   font-size:0.7rem;
   font-weight:600;
   text-transform:uppercase;
-  letter-spacing:0.5px;
-  color:var(--text-dim);
+  letter-spacing:0.4px;
 }
-.gauge-val{
-  font-size:1.45rem;
-  font-weight:800;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+.status-val{
+  font-weight:700;
+  margin-top:3px;
   color:#fff;
-  letter-spacing:-0.5px;
+  font-family:ui-monospace,SFMono-Regular,monospace;
+  word-break:break-all;
 }
-.gauge-val span{font-size:0.8rem;color:var(--text-muted);font-weight:500;margin-left:2px}
-.gauge-sub{
-  font-size:0.7rem;
-  color:var(--text-muted);
-}
-/* Dynamic Wattage Meter Bar */
-.watt-bar-wrap{
+.status-item.full-span{
   grid-column:1 / -1;
-  background:rgba(11,17,32,0.7);
-  border:1px solid rgba(255,255,255,0.06);
-  border-radius:14px;
-  padding:12px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-.watt-bar-bg{
-  width:100%;height:8px;
-  background:#1e293b;
-  border-radius:99px;
-  overflow:hidden;
-}
-.watt-bar-fill{
-  height:100%;
-  width:0%;
-  background:linear-gradient(90deg,#38bdf8,#10b981,#f59e0b);
-  border-radius:99px;
-  transition:width 0.6s ease;
 }
 
-/* Accordion Drawer Section */
+/* Preset Chips */
+.presets-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:14px;
+}
+.preset-btn{
+  background:rgba(11,17,32,0.8);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px;
+  padding:10px;
+  text-align:left;
+  cursor:pointer;
+  transition:all 0.2s;
+  color:var(--text-main);
+}
+.preset-btn:hover, .preset-btn.selected{
+  border-color:var(--cyan);
+  background:rgba(56,189,248,0.12);
+}
+.preset-name{font-weight:700;font-size:0.85rem;color:#fff}
+.preset-desc{font-size:0.72rem;color:var(--text-dim);margin-top:2px}
+
+/* Drawers */
 .drawer{
   border:1px solid var(--card-border);
   background:rgba(15,23,42,0.5);
   border-radius:14px;
   overflow:hidden;
-  transition:border-color 0.2s;
 }
 .drawer-hd{
   padding:14px 16px;
@@ -396,26 +187,18 @@ body{
   cursor:pointer;
   user-select:none;
   background:rgba(15,23,42,0.6);
-  font-size:0.88rem;
+  font-size:0.9rem;
   font-weight:600;
-  color:var(--text-main);
 }
 .drawer-hd:hover{background:rgba(30,41,59,0.5)}
-.drawer-arrow{
-  width:16px;height:16px;fill:var(--text-muted);
-  transition:transform 0.3s;
-}
+.drawer-arrow{width:16px;height:16px;fill:var(--text-muted);transition:transform 0.3s}
 .drawer.open .drawer-arrow{transform:rotate(180deg)}
-.drawer-bd{
-  display:none;
-  padding:16px;
-  border-top:1px solid rgba(255,255,255,0.05);
-}
+.drawer-bd{display:none;padding:16px;border-top:1px solid rgba(255,255,255,0.05)}
 .drawer.open .drawer-bd{display:block}
 
-/* Form Styles */
+/* Forms & Inputs */
 .fg{margin-bottom:12px}
-label{display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+label{display:block;font-size:0.74rem;color:var(--text-muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
 input,select{
   width:100%;
   background:#090d16;
@@ -425,7 +208,6 @@ input,select{
   color:#fff;
   font-size:0.9rem;
   outline:none;
-  transition:border-color 0.2s;
 }
 input:focus,select:focus{border-color:var(--cyan)}
 .row{display:flex;gap:8px}
@@ -436,7 +218,7 @@ input:focus,select:focus{border-color:var(--cyan)}
   border:none;
   border-radius:8px;
   padding:12px;
-  font-size:0.95rem;
+  font-size:0.92rem;
   font-weight:700;
   cursor:pointer;
   transition:all 0.2s;
@@ -456,172 +238,143 @@ input:focus,select:focus{border-color:var(--cyan)}
 }
 .btn-secondary:hover{background:#334155}
 
-/* System Details Grid */
-.sys-list{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  font-size:0.8rem;
-}
-.sys-row{
-  display:flex;
-  justify-content:space-between;
-  padding-bottom:6px;
-  border-bottom:1px solid rgba(255,255,255,0.04);
-}
-.sys-row span:first-child{color:var(--text-dim)}
-.sys-row span:last-child{color:var(--text-main);font-family:ui-monospace,SFMono-Regular,monospace}
-
-.msg{
-  padding:12px;border-radius:8px;font-size:0.85rem;margin-top:12px;display:none;text-align:center;
-}
+.msg{padding:12px;border-radius:8px;font-size:0.85rem;margin-top:12px;display:none;text-align:center}
 .msg-success{background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#6ee7b7}
 .msg-error{background:rgba(244,63,94,0.15);border:1px solid #f43f5e;color:#fda4af}
-.footer{
-  text-align:center;color:var(--text-dim);font-size:0.72rem;margin-top:10px;
-}
+.footer{text-align:center;color:var(--text-dim);font-size:0.74rem;margin-top:10px}
 </style>
 </head>
 <body>
 <div class="app-container">
 
-  <!-- Top App Header -->
+  <!-- Header -->
   <div class="header">
     <div class="brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       </div>
       <div class="brand-text">
-        <h1 id="deviceTitle">Water Pump</h1>
-        <p id="ipSubtext">Connecting...</p>
+        <h1 id="coreTitle">CraftThingy Core</h1>
+        <p id="ipSubtext">Checking...</p>
       </div>
     </div>
     <div id="livePill" class="live-pill">
       <span class="pulse-dot"></span>
-      <span id="liveText">LIVE</span>
+      <span id="liveText">ONLINE</span>
     </div>
   </div>
 
-  <!-- Schema & Connection Details -->
-  <div class="schema-bar">
-    <div style="display:flex;align-items:center;gap:6px">
-      <span style="color:var(--text-dim)">Schema:</span>
-      <span id="schemaBadge" class="badge badge-pzem">PROBING...</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:6px">
-      <span style="color:var(--text-dim)">Wi-Fi:</span>
-      <span id="wifiSsidBadge" style="font-weight:600;color:#fff">--</span>
-    </div>
-  </div>
-
-  <!-- Hero Card: Water Tank + Pump State -->
+  <!-- Section 1: Live Device Status (Core Telemetry) -->
   <div class="card">
-    <div class="hero-tank">
-      <!-- Water Tank Cylinder Visualizer -->
-      <div class="tank-visual-wrap">
-        <div class="tank-visual">
-          <div class="tank-mark top">FULL</div>
-          <div class="tank-mark mid">50%</div>
-          <div class="tank-mark bot">LOW</div>
-          <div id="tankWater" class="tank-water"></div>
-        </div>
-        <div id="tankLabel" class="tank-label">NORMAL</div>
+    <h2>
+      <svg style="width:18px;height:18px;fill:#38bdf8" viewBox="0 0 24 24"><path d="M13 2.05v3.03c3.39.49 6 3.39 6 6.92 0 .9-.18 1.75-.48 2.54l2.6 1.53c.56-1.24.88-2.62.88-4.07 0-5.18-3.95-9.45-9-9.95zM12 19c-3.87 0-7-3.13-7-7 0-3.53 2.61-6.43 6-6.92V2.05c-5.05.5-9 4.76-9 9.95 0 5.52 4.47 10 9.99 10 3.31 0 6.24-1.61 8.04-4.09l-2.6-1.53C16.18 17.85 14.25 19 12 19z"/></svg>
+      2. Live Device Status
+    </h2>
+    <div class="status-grid">
+      <div class="status-item">
+        <div class="status-label">Device Name</div>
+        <div class="status-val" id="stName">--</div>
       </div>
-
-      <!-- Pump Status & Run Clock -->
-      <div class="pump-info">
-        <div id="pumpBadge" class="pump-status-badge">
-          <svg class="impeller" viewBox="0 0 24 24">
-            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V17a1 1 0 0 1-2 0v-.07a4 4 0 0 1-2.86-2.86H8a1 1 0 0 1 0-2h.14A4 4 0 0 1 11 9.21V9a1 1 0 0 1 2 0v.21a4 4 0 0 1 2.86 2.86H16a1 1 0 0 1 0 2h-.14A4 4 0 0 1 13 16.93z"/>
-          </svg>
-          <span id="pumpBadgeText">STANDBY</span>
-        </div>
-        <div>
-          <div style="font-size:0.7rem;color:var(--text-dim);font-weight:600;text-transform:uppercase">Active Duration</div>
-          <div id="pumpTimer" class="timer-text">00:00</div>
-        </div>
-        <div class="float-status">
-          Float Switch: <span id="floatStatusText">Satisfied</span>
-        </div>
+      <div class="status-item">
+        <div class="status-label">Chip Target</div>
+        <div class="status-val" id="stTarget">--</div>
       </div>
-    </div>
-
-    <!-- Dry-run / Safety Warning -->
-    <div id="dryRunAlarm" class="alarm-banner">
-      ⚠️ <strong>DRY-RUN ALARM:</strong> Continuous max run limit exceeded. Relay stopped to protect motor.
-      <button class="btn-secondary" style="margin-top:6px;width:100%;padding:6px" onclick="sendCmd('reset_safety')">Reset Alarm</button>
-    </div>
-
-    <!-- Quick Action Controls -->
-    <div class="control-actions">
-      <button class="btn-cmd btn-auto" onclick="sendCmd('auto')">
-        <span style="font-size:1.1rem">🔄</span>
-        <span>AUTO</span>
-      </button>
-      <button class="btn-cmd btn-start" onclick="sendCmd('start')">
-        <span style="font-size:1.1rem">▶️</span>
-        <span>MANUAL</span>
-      </button>
-      <button class="btn-cmd btn-stop" onclick="sendCmd('stop')">
-        <span style="font-size:1.1rem">⏹️</span>
-        <span>STOP</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- PZEM AC Power Meter Telemetry -->
-  <div id="pzemCard" class="card">
-    <div class="telemetry-hd">
-      <h2>
-        <svg style="width:18px;height:18px;fill:#a855f7" viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
-        PZEM-004T AC Telemetry
-      </h2>
-      <span id="acAlertBadge" class="badge" style="background:rgba(16,185,129,0.15);color:#34d399">AC 220V OK</span>
-    </div>
-
-    <div class="telemetry-grid">
-      <div class="gauge-card">
-        <div class="gauge-label">AC Voltage</div>
-        <div class="gauge-val" id="valVoltage">0.0 <span>V</span></div>
-        <div class="gauge-sub" id="valFreq">50.0 Hz</div>
+      <div class="status-item">
+        <div class="status-label">Flash Size</div>
+        <div class="status-val" id="stFlash">--</div>
       </div>
-      <div class="gauge-card">
-        <div class="gauge-label">Current</div>
-        <div class="gauge-val" id="valCurrent">0.00 <span>A</span></div>
-        <div class="gauge-sub">RMS Load</div>
+      <div class="status-item">
+        <div class="status-label">Core Version</div>
+        <div class="status-val" id="stCoreVer">1.1.0</div>
       </div>
-      <div class="gauge-card">
-        <div class="gauge-label">Active Power</div>
-        <div class="gauge-val" id="valPower">0.0 <span>W</span></div>
-        <div class="gauge-sub" id="valPf">0.00 PF</div>
+      <div class="status-item">
+        <div class="status-label">Active Role</div>
+        <div class="status-val" id="stRole" style="color:var(--cyan)">--</div>
       </div>
-      <div class="gauge-card">
-        <div class="gauge-label">Accumulated</div>
-        <div class="gauge-val" id="valEnergy">0.00 <span>kWh</span></div>
-        <div class="gauge-sub">Total Energy</div>
+      <div class="status-item">
+        <div class="status-label">WiFi Status</div>
+        <div class="status-val" id="stWifi">--</div>
       </div>
-      <div class="watt-bar-wrap">
-        <div style="display:flex;justify-content:space-between;font-size:0.72rem">
-          <span style="color:var(--text-dim)">House Power Load (1300W Budget)</span>
-          <span id="wattPctText" style="color:var(--cyan);font-weight:700">0%</span>
-        </div>
-        <div class="watt-bar-bg">
-          <div id="wattBarFill" class="watt-bar-fill"></div>
-        </div>
+      <div class="status-item">
+        <div class="status-label">Fallback Hotspot</div>
+        <div class="status-val" id="stAp">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">IP Address</div>
+        <div class="status-val" id="stIp">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">Rolling Sequence</div>
+        <div class="status-val" id="stSeq">--</div>
+      </div>
+      <div class="status-item">
+        <div class="status-label">OTA Status</div>
+        <div class="status-val" id="stOta">Idle</div>
       </div>
     </div>
   </div>
 
-  <!-- Drawer 1: Wi-Fi Setup & Network Provisioning -->
+  <!-- Section 2: Active Software & Role Switcher -->
+  <div class="card">
+    <h2>
+      <svg style="width:18px;height:18px;fill:#10b981" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+      Software & Role Switcher
+    </h2>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:12px">
+      Select an appliance firmware to download and flash onto this hardware over-the-air from GitHub Releases.
+    </p>
+
+    <!-- Quick Module Presets -->
+    <div class="presets-grid">
+      <div class="preset-btn" onclick="applyPreset('craftthingy-esp-water-pump','water_pump')">
+        <div class="preset-name">💧 Water Pump</div>
+        <div class="preset-desc">craftthingy-esp-water-pump</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset('craftthingy-esp-washing-machine','washing_machine')">
+        <div class="preset-name">🧺 Washing Machine</div>
+        <div class="preset-desc">craftthingy-esp-washing-machine</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset('craftthingy-esp-central-brain','central_brain')">
+        <div class="preset-name">🧠 Central Brain</div>
+        <div class="preset-desc">1300W Power Arbitrator</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset('craftthingy-esp-core-ota','core_ota')">
+        <div class="preset-name">⚙️ Reset to Pure Core</div>
+        <div class="preset-desc">OTA Shell Only</div>
+      </div>
+    </div>
+
+    <form id="ghForm" onsubmit="handleSoftwareSwitch(event)">
+      <div class="fg">
+        <label>GitHub Organization</label>
+        <input type="text" id="ghOrgInput" value="CraftThingy-Digital-Innovation" required>
+      </div>
+      <div class="fg">
+        <label>Controller Application Repo</label>
+        <input type="text" id="ghRepoInput" placeholder="e.g. craftthingy-esp-water-pump" required>
+      </div>
+      <div class="fg">
+        <label>Active Role Name</label>
+        <input type="text" id="ghRoleInput" placeholder="e.g. water_pump" required>
+      </div>
+      <div class="fg">
+        <label>GitHub Token (Optional for Private Repos)</label>
+        <input type="password" id="ghTokenInput" placeholder="github_pat_...">
+      </div>
+      <button type="submit" class="btn-primary" id="switchBtn">Switch Software & Update Now</button>
+    </form>
+  </div>
+
+  <!-- Section 3: Wi-Fi Provisioning Drawer -->
   <div class="drawer" id="wifiDrawer">
     <div class="drawer-hd" onclick="toggleDrawer('wifiDrawer')">
       <span>📶 Wi-Fi & Station Provisioning</span>
       <svg class="drawer-arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
     </div>
     <div class="drawer-bd">
-      <form id="setupForm" onsubmit="handleWifiSubmit(event)">
+      <form id="wifiForm" onsubmit="handleWifiSubmit(event)">
         <div class="fg">
-          <label>1. Nearby Wi-Fi</label>
+          <label>1. Nearby Wi-Fi Networks</label>
           <div class="row">
             <select id="ssidSelect" onchange="if(this.value)document.getElementById('ssidInput').value=this.value">
               <option value="">-- Tap Scan to Find Networks --</option>
@@ -639,7 +392,7 @@ input:focus,select:focus{border-color:var(--cyan)}
         </div>
         <div class="fg">
           <label>Device Name (Hostname)</label>
-          <input type="text" id="nameInput" placeholder="e.g. Water Pump Ground Floor">
+          <input type="text" id="nameInput" placeholder="e.g. CraftThingy-Device">
         </div>
 
         <div style="margin:12px 0 8px 0;font-size:0.8rem;color:var(--cyan);cursor:pointer;text-decoration:underline" onclick="toggleEl('apAdvSec')">
@@ -661,39 +414,15 @@ input:focus,select:focus{border-color:var(--cyan)}
     </div>
   </div>
 
-  <!-- Drawer 2: Hardware & System Maintenance -->
-  <div class="drawer" id="diagDrawer">
-    <div class="drawer-hd" onclick="toggleDrawer('diagDrawer')">
-      <span>⚙️ Hardware & Diagnostics</span>
-      <svg class="drawer-arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
-    </div>
-    <div class="drawer-bd">
-      <div class="sys-list">
-        <div class="sys-row"><span>App Version</span><span id="diagAppVer">1.1.0</span></div>
-        <div class="sys-row"><span>Core Version</span><span id="diagCoreVer">--</span></div>
-        <div class="sys-row"><span>Hardware Board</span><span id="diagBoard">--</span></div>
-        <div class="sys-row"><span>IP Address</span><span id="diagIp">--</span></div>
-        <div class="sys-row"><span>MAC Address</span><span id="diagMac">--</span></div>
-        <div class="sys-row"><span>Free Memory</span><span id="diagHeap">-- KB</span></div>
-        <div class="sys-row"><span>Device Uptime</span><span id="diagUptime">--</span></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px">
-        <button class="btn-secondary" onclick="checkOta()">Check OTA</button>
-        <button class="btn-secondary" onclick="reprobeHardware()">Re-Probe HW</button>
-      </div>
-      <button class="btn-secondary" style="width:100%;margin-top:8px;color:#fda4af;border-color:rgba(244,63,94,0.3)" onclick="rebootDevice()">Reboot Device</button>
-    </div>
-  </div>
-
-  <!-- Drawer 3: Security & Master Secret Key -->
+  <!-- Section 4: Security & Master Key Drawer -->
   <div class="drawer" id="secDrawer">
     <div class="drawer-hd" onclick="toggleDrawer('secDrawer')">
-      <span>🔐 Master Secret Key / API Auth</span>
+      <span>🔐 Master Secret Key & API Security</span>
       <svg class="drawer-arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
     </div>
     <div class="drawer-bd">
       <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">
-        Protected control commands require the Master Key. Save it here to allow direct browser actions.
+        Protected commands require the Master Key. Enter it here to authorize browser actions.
       </p>
       <div class="fg">
         <label>Master Secret Key</label>
@@ -703,8 +432,22 @@ input:focus,select:focus{border-color:var(--cyan)}
     </div>
   </div>
 
+  <!-- Section 5: Hardware Maintenance -->
+  <div class="drawer" id="diagDrawer">
+    <div class="drawer-hd" onclick="toggleDrawer('diagDrawer')">
+      <span>⚙️ Hardware Actions</span>
+      <svg class="drawer-arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+    </div>
+    <div class="drawer-bd">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn-secondary" onclick="checkOta()">Trigger OTA Check</button>
+        <button class="btn-secondary" style="color:#fda4af;border-color:rgba(244,63,94,0.3)" onclick="rebootDevice()">Reboot Device</button>
+      </div>
+    </div>
+  </div>
+
   <div id="statusAlert" class="msg"></div>
-  <div class="footer">CraftThingy Digital Innovation &copy; 2026 • Firmware v1.1.0</div>
+  <div class="footer">CraftThingy Digital Innovation &copy; 2026 • Core Framework v1.1.0</div>
 </div>
 
 <script>
@@ -716,10 +459,8 @@ function getAuthHeaders(){
   if(activeKey) h['X-Master-Key']=activeKey;
   return h;
 }
-
 function toggleDrawer(id){
-  var el=document.getElementById(id);
-  el.classList.toggle('open');
+  document.getElementById(id).classList.toggle('open');
 }
 function toggleEl(id){
   var el=document.getElementById(id);
@@ -733,18 +474,92 @@ function showAlert(txt,isErr){
   setTimeout(function(){el.style.display='none';},4000);
 }
 
-function sendCmd(cmd){
-  fetch('/api/v1/device/command',{
+function applyPreset(repo,role){
+  document.getElementById('ghRepoInput').value=repo;
+  document.getElementById('ghRoleInput').value=role;
+  showAlert('Preset selected: '+role,false);
+}
+
+function pollStatus(){
+  fetch('/api/v1/system/status')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var sys=d.data?d.data.system:{};
+    var net=d.data?d.data.network:{};
+    var ota=d.data?d.data.ota:{};
+    var sec=d.data?d.data.security:{};
+
+    if(sys.name){
+      document.getElementById('coreTitle').textContent=sys.name;
+      document.getElementById('stName').textContent=sys.name;
+    }
+    var ip=net.ip||'0.0.0.0';
+    var isSta=(net.state==='connected');
+    document.getElementById('ipSubtext').textContent=(isSta?'IP: '+ip:'SoftAP: '+ip);
+
+    var pill=document.getElementById('livePill');
+    var liveText=document.getElementById('liveText');
+    if(isSta){
+      pill.className='live-pill';
+      liveText.textContent='ONLINE';
+    }else{
+      pill.className='live-pill ap-mode';
+      liveText.textContent='AP SETUP';
+    }
+
+    document.getElementById('stTarget').textContent=sys.chip+' ('+(sys.boardTarget||'--')+')';
+    document.getElementById('stFlash').textContent=(sys.flashBytes?(sys.flashBytes/(1024*1024)).toFixed(1)+' MB':'1.0 MB');
+    document.getElementById('stCoreVer').textContent=sys.coreVersion||'1.1.0';
+    document.getElementById('stRole').textContent=ota.activeRole||'unassigned';
+    document.getElementById('stWifi').textContent=net.state||'--';
+    document.getElementById('stAp').textContent=net.apSsid+' ['+(net.apSecured?'Secured':'Open')+']';
+    document.getElementById('stIp').textContent=net.ip||'--';
+    document.getElementById('stSeq').textContent=sec.rollingSequence||1;
+    document.getElementById('stOta').textContent=ota.status||'Idle';
+
+    if(ota.controllerRepo && !document.getElementById('ghRepoInput').value){
+      document.getElementById('ghRepoInput').value=ota.controllerRepo;
+    }
+    if(ota.activeRole && !document.getElementById('ghRoleInput').value){
+      document.getElementById('ghRoleInput').value=ota.activeRole;
+    }
+  }).catch(function(){});
+}
+
+function handleSoftwareSwitch(e){
+  e.preventDefault();
+  var org=document.getElementById('ghOrgInput').value.trim();
+  var repo=document.getElementById('ghRepoInput').value.trim();
+  var role=document.getElementById('ghRoleInput').value.trim();
+  var token=document.getElementById('ghTokenInput').value.trim();
+  var btn=document.getElementById('switchBtn');
+  btn.disabled=true;
+  btn.textContent='Saving Target & Triggering OTA...';
+
+  var body={
+    org:org,
+    core_repo:'craftthingy-esp-core-ota',
+    controller_repo:repo,
+    role:role,
+    token:token
+  };
+
+  fetch('/api/v1/github/config',{
     method:'POST',
     headers:getAuthHeaders(),
-    body:JSON.stringify({command:cmd})
+    body:JSON.stringify(body)
   }).then(function(r){return r.json();})
   .then(function(d){
-    if(d.status==='success') showAlert(d.data.message||'Command executed',false);
-    else showAlert(d.error?d.error.message:'Command failed',true);
-    pollTelemetry();
-  }).catch(function(err){
-    showAlert('Network error sending command',true);
+    showAlert('Target updated to '+repo+'! Triggering update download...',false);
+    return fetch('/api/v1/ota/check',{method:'POST',headers:getAuthHeaders()});
+  }).then(function(){
+    showAlert('OTA Firmware download triggered! ESP will restart into '+role+'.',false);
+    btn.disabled=false;
+    btn.textContent='Switch Software & Update Now';
+  }).catch(function(){
+    showAlert('Error saving target or triggering OTA',true);
+    btn.disabled=false;
+    btn.textContent='Switch Software & Update Now';
   });
 }
 
@@ -779,10 +594,9 @@ function handleWifiSubmit(e){
   var name=document.getElementById('nameInput').value.trim();
   var apSsid=document.getElementById('apSsidInput').value.trim();
   var apPass=document.getElementById('apPassInput').value.trim();
-  if(!ssid){alert('Please enter a Wi-Fi SSID');return;}
   var btn=document.getElementById('saveWifiBtn');
   btn.disabled=true;
-  btn.textContent='Saving & Connecting...';
+  btn.textContent='Saving...';
   var body=new URLSearchParams();
   body.append('ssid',ssid);
   body.append('pass',pass);
@@ -791,140 +605,14 @@ function handleWifiSubmit(e){
   if(apPass)body.append('ap_pass',apPass);
   fetch('/setup',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()})
   .then(function(){
-    showAlert('Settings saved! Connecting to '+ssid+'...',false);
+    showAlert('Wi-Fi saved! Connecting to '+ssid+'...',false);
     btn.disabled=false;
     btn.textContent='Saved';
   }).catch(function(){
-    showAlert('Submitted! Checking connection...',false);
+    showAlert('Settings submitted',false);
     btn.disabled=false;
     btn.textContent='Save & Connect';
   });
-}
-
-function formatSec(s){
-  var m=Math.floor(s/60);
-  var sec=s%60;
-  return (m<10?'0':'')+m+':'+(sec<10?'0':'')+sec;
-}
-
-function pollTelemetry(){
-  fetch('/api/v1/system/status')
-  .then(function(r){return r.json();})
-  .then(function(d){
-    var sys=d.data?d.data.system:{};
-    var net=d.data?d.data.network:{};
-    var dev=d.data?d.data.device:{};
-
-    if(sys.name) document.getElementById('deviceTitle').textContent=sys.name;
-    var ip=net.ip||'0.0.0.0';
-    var isSta=(net.state==='connected');
-    document.getElementById('ipSubtext').textContent=(isSta?'IP: '+ip:'SoftAP Mode: '+ip);
-
-    var pill=document.getElementById('livePill');
-    var liveText=document.getElementById('liveText');
-    if(isSta){
-      pill.className='live-pill';
-      liveText.textContent='ONLINE';
-    }else{
-      pill.className='live-pill ap-mode';
-      liveText.textContent='AP SETUP';
-    }
-
-    if(net.ssid) document.getElementById('wifiSsidBadge').textContent=net.ssid;
-
-    // Pump controller state
-    if(dev.hardwareSchema){
-      var sBadge=document.getElementById('schemaBadge');
-      var sName=dev.hardwareSchema.toUpperCase();
-      sBadge.textContent=sName.replace('_',' ');
-      sBadge.className=(sName.indexOf('PZEM')>=0)?'badge badge-pzem':'badge badge-legacy';
-    }
-
-    // Water level
-    var demandsFill=dev.tankDemandsFill;
-    var tankEl=document.getElementById('tankWater');
-    var tankLbl=document.getElementById('tankLabel');
-    if(demandsFill){
-      tankEl.style.height='20%';
-      tankEl.className='tank-water';
-      tankLbl.textContent='LOW WATER';
-      tankLbl.style.color='var(--amber)';
-      document.getElementById('floatStatusText').textContent='CALLING FOR WATER';
-      document.getElementById('floatStatusText').style.color='var(--amber)';
-    }else{
-      tankEl.style.height='85%';
-      tankEl.className='tank-water filling';
-      tankLbl.textContent='SATISFIED / FULL';
-      tankLbl.style.color='var(--emerald)';
-      document.getElementById('floatStatusText').textContent='SATISFIED (HIGH)';
-      document.getElementById('floatStatusText').style.color='var(--emerald)';
-    }
-
-    // Pump running state
-    var isRunning=dev.pumpRunning;
-    var pBadge=document.getElementById('pumpBadge');
-    var pText=document.getElementById('pumpBadgeText');
-    if(isRunning){
-      pBadge.className='pump-status-badge active';
-      pText.textContent='RUNNING';
-    }else if(dev.interrupted){
-      pBadge.className='pump-status-badge interrupted';
-      pText.textContent='STOPPED';
-    }else{
-      pBadge.className='pump-status-badge';
-      pText.textContent='STANDBY';
-    }
-
-    document.getElementById('pumpTimer').textContent=formatSec(dev.runDurationSec||0);
-
-    // Dry run alarm
-    var alarmEl=document.getElementById('dryRunAlarm');
-    if(dev.dryRunAlarm) alarmEl.className='alarm-banner visible';
-    else alarmEl.className='alarm-banner';
-
-    // PZEM AC readings
-    var hasPzem=dev.hasPzem;
-    var pzemCard=document.getElementById('pzemCard');
-    if(!hasPzem){
-      pzemCard.style.opacity='0.5';
-    }else{
-      pzemCard.style.opacity='1';
-    }
-
-    document.getElementById('valVoltage').innerHTML=(dev.voltage||0).toFixed(1)+' <span>V</span>';
-    document.getElementById('valFreq').textContent=(dev.frequency||50.0).toFixed(1)+' Hz';
-    document.getElementById('valCurrent').innerHTML=(dev.current||0).toFixed(3)+' <span>A</span>';
-    var pwr=dev.power||0;
-    document.getElementById('valPower').innerHTML=pwr.toFixed(1)+' <span>W</span>';
-    document.getElementById('valPf').textContent='PF: '+(dev.powerFactor||0).toFixed(2);
-    document.getElementById('valEnergy').innerHTML=(dev.energy||0).toFixed(3)+' <span>kWh</span>';
-
-    // 1300W House budget calculation
-    var pct=Math.min(100,Math.round((pwr/1300)*100));
-    document.getElementById('wattBarFill').style.width=pct+'%';
-    document.getElementById('wattPctText').textContent=pct+'% ('+pwr.toFixed(0)+'W / 1300W)';
-
-    var acAlert=document.getElementById('acAlertBadge');
-    if(dev.acPowerAlert){
-      acAlert.textContent='⚠️ MAINS LOST';
-      acAlert.style.background='rgba(244,63,94,0.2)';
-      acAlert.style.color='#f43f5e';
-    }else{
-      acAlert.textContent='AC 220V OK';
-      acAlert.style.background='rgba(16,185,129,0.15)';
-      acAlert.style.color='#34d399';
-    }
-
-    // Diagnostics drawer
-    document.getElementById('diagCoreVer').textContent=sys.coreVersion||'--';
-    document.getElementById('diagBoard').textContent=sys.boardTarget||'--';
-    document.getElementById('diagIp').textContent=net.ip||'--';
-    document.getElementById('diagMac').textContent=sys.mac||'--';
-    document.getElementById('diagHeap').textContent=Math.round((sys.freeHeap||0)/1024)+' KB';
-    var up=d.uptime||0;
-    document.getElementById('diagUptime').textContent=Math.floor(up/3600)+'h '+Math.floor((up%3600)/60)+'m '+(up%60)+'s';
-
-  }).catch(function(){});
 }
 
 function saveMasterKey(){
@@ -932,18 +620,13 @@ function saveMasterKey(){
   if(k){
     localStorage.setItem('craft_master_key',k);
     activeKey=k;
-    showAlert('Master Key saved to browser storage',false);
+    showAlert('Master Key saved to browser',false);
   }
-}
-
-function reprobeHardware(){
-  sendCmd('reprobe');
 }
 function checkOta(){
   fetch('/api/v1/ota/check',{method:'POST',headers:getAuthHeaders()})
-  .then(function(r){return r.json();})
-  .then(function(d){showAlert('OTA Check triggered',false);})
-  .catch(function(){showAlert('OTA request error',true);});
+  .then(function(){showAlert('OTA Check triggered',false);})
+  .catch(function(){showAlert('OTA Error',true);});
 }
 function rebootDevice(){
   if(confirm('Reboot ESP device now?')){
@@ -954,8 +637,8 @@ function rebootDevice(){
 
 window.onload=function(){
   document.getElementById('masterKeyInput').value=activeKey;
-  pollTelemetry();
-  setInterval(pollTelemetry,2500);
+  pollStatus();
+  setInterval(pollStatus,3000);
   setTimeout(scanWifi,800);
 };
 </script>

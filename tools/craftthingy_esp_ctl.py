@@ -111,12 +111,19 @@ def main():
     seed_parser.add_argument("--no-sync-master", dest="sync_master", action="store_false", help="Do NOT sync master secret key")
     seed_parser.set_defaults(sync_master=True)
 
-    # Controller Commands
+    # Generic Appliance Controller Commands (Universal for any attached module)
+    subparsers.add_parser("controller-status", help="Get live telemetry from attached hardware controller")
+    ctrl_cmd_parser = subparsers.add_parser("controller-cmd", help="Send command to attached hardware controller")
+    ctrl_cmd_parser.add_argument("--cmd", required=True, help="Command name (e.g. start, stop, auto, reprobe)")
+    ctrl_cmd_parser.add_argument("--payload", default="", help="Optional JSON or string payload")
+
+    # Backwards-compatible Pump Aliases
     subparsers.add_parser("pump-status", help="Get live water pump / controller telemetry")
     subparsers.add_parser("pump-stop", help="🚨 EMERGENCY INTERRUPT: Stop the pump immediately")
     subparsers.add_parser("pump-start", help="▶️ Manually force pump ON")
     subparsers.add_parser("pump-auto", help="🔄 RESUME AUTO float-switch mode")
     subparsers.add_parser("pump-reset-safety", help="🛡️ Reset dry-run safety alarm")
+    subparsers.add_parser("pump-reprobe", help="⚡ Re-probe hardware schema (1uF/10uF RC vs Legacy G3)")
 
     # Set Device Name
     name_parser = subparsers.add_parser("set-name", help="Change device name and network hostname on the fly")
@@ -205,9 +212,17 @@ def main():
         print(f"\n[!] Rolling key re-seeded to sequence {args.start_seq}!")
         print(f"[!] SAVE YOUR NEW SEED/KEY: {args.new_seed}")
 
-    elif args.command == "pump-status":
+    elif args.command in ("controller-status", "pump-status"):
         res = send_signed_request(args.host, "GET", "/api/v1/device/status", args.key, args.seq)
-        print("[+] Water Pump / Controller Telemetry:")
+        print("[+] Hardware Controller Telemetry:")
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "controller-cmd":
+        payload = {"cmd": args.cmd}
+        if args.payload:
+            payload["payload"] = args.payload
+        res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, payload)
+        print(f"[+] Controller Command '{args.cmd}' Result:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "pump-stop":
@@ -228,6 +243,11 @@ def main():
     elif args.command == "pump-reset-safety":
         res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, {"cmd": "reset_safety"})
         print("[+] Safety Alarm Reset Result:")
+        print(json.dumps(res, indent=2))
+
+    elif args.command == "pump-reprobe":
+        res = send_signed_request(args.host, "POST", "/api/v1/device/command", args.key, args.seq, {"cmd": "reprobe"})
+        print("[+] Hardware Re-Probe Result:")
         print(json.dumps(res, indent=2))
 
     elif args.command == "reboot":
