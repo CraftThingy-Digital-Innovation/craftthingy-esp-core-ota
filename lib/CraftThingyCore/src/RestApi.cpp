@@ -263,6 +263,9 @@ void RestApi::handleStatus() {
     data += "\"status\":\"online\",";
     data += "\"name\":\"" + String(cfg.deviceName) + "\",";
     data += "\"coreVersion\":\"" + String(CRAFT_CORE_VERSION) + "\",";
+#ifdef APP_VERSION
+    data += "\"appVersion\":\"" + String(APP_VERSION) + "\",";
+#endif
     data += "\"boardTarget\":\"" + String(fp.archTag) + "\",";
     data += "\"chip\":\"" + String(fp.chipName) + "\",";
     data += "\"flashBytes\":" + String(fp.flashSizeBytes) + ",";

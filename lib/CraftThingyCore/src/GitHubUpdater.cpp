@@ -102,7 +102,11 @@ bool GitHubUpdater::checkForUpdates(bool force) {
     // update the controller application first because it embeds the core framework!
     if (controllerRepo.length() > 0 && activeRole != "none" && activeRole != "core") {
         String assetTarget = activeRole + "-" + String(fp.archTag);
+#ifdef APP_VERSION
+        bool appUpdated = checkAndApplyRepoUpdate(org, controllerRepo, APP_VERSION, assetTarget);
+#else
         bool appUpdated = checkAndApplyRepoUpdate(org, controllerRepo, CRAFT_CORE_VERSION, assetTarget);
+#endif
         if (appUpdated) {
             return true; // Device will reboot
         }
