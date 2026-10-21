@@ -791,7 +791,19 @@
 
       log(`Sending WiFi credentials for "${ssid}" (${useStatic ? 'Static IP: ' + staticIp : 'DHCP Dynamic IP'})...`);
       const payload = { ssid, pass, useStatic, staticIp, gateway, subnet, dns1, dns2 };
-      await apiRequest('POST', '/api/v1/wifi/config', payload);
+      const q = new URLSearchParams({
+        ssid,
+        pass,
+        useStatic: useStatic ? 'true' : 'false',
+        use_static: useStatic ? 'true' : 'false',
+        staticIp,
+        static_ip: staticIp,
+        gateway,
+        subnet,
+        dns1,
+        dns2
+      });
+      await apiRequest('POST', `/api/v1/wifi/config?${q.toString()}`, payload);
       log(`[Success] Credentials saved! ESP is connecting to "${ssid}" in background...`);
       log(`[Auto-Detect] Polling ESP for newly assigned network IP...`);
       startLanIpDiscovery(ssid);
