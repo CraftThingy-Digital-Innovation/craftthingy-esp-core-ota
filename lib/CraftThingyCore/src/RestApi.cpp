@@ -273,11 +273,16 @@ void RestApi::handleStatus() {
     data += "\"mac\":\"" + fp.macAddress + "\"";
     data += "},";
 
+    String staIpStr = WiFiManager::getIPAddress();
+    String apIpStr = WiFiManager::getAPIPAddress();
+    bool connected = WiFiManager::isConnected();
+    String mainIp = connected ? staIpStr : (apIpStr != "--" ? apIpStr : "192.168.4.1");
+
     data += "\"network\":{";
-    data += "\"state\":\"" + String(WiFiManager::isConnected() ? "connected" : (WiFiManager::getState() == WIFI_STATE_CONNECTING ? "connecting" : "ap_mode")) + "\",";
-    data += "\"ip\":\"" + (WiFiManager::isConnected() ? WiFiManager::getIPAddress() : WiFiManager::getAPIPAddress()) + "\",";
-    data += "\"staIp\":\"" + WiFiManager::getIPAddress() + "\",";
-    data += "\"apIp\":\"" + WiFiManager::getAPIPAddress() + "\",";
+    data += "\"state\":\"" + String(connected ? "connected" : (WiFiManager::getState() == WIFI_STATE_CONNECTING ? "connecting" : "ap_mode")) + "\",";
+    data += "\"ip\":\"" + mainIp + "\",";
+    data += "\"staIp\":\"" + staIpStr + "\",";
+    data += "\"apIp\":\"" + apIpStr + "\",";
     data += "\"gateway\":\"" + WiFiManager::getGatewayIP() + "\",";
     data += "\"subnet\":\"" + WiFiManager::getSubnetMask() + "\",";
     data += "\"dns\":\"" + WiFiManager::getDnsIP() + "\",";

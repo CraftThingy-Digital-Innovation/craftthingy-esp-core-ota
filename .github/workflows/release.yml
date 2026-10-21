@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v1.0.0)'
+        description: 'Release version tag (e.g. v1.1.0)'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.1.0'
 
 permissions:
   contents: write
@@ -44,7 +44,7 @@ jobs:
           pio run -e esp32c3
           pio run -e esp32s2
 
-      - name: Package Firmware Binaries & Calculate Hashes
+      - name: Package Firmware Binaries, Tools & Calculate Hashes
         run: |
           mkdir -p release_assets
           cp .pio/build/esp01_1m/firmware.bin release_assets/firmware-esp01s.bin
@@ -53,6 +53,13 @@ jobs:
           cp .pio/build/esp32c3/firmware.bin release_assets/firmware-esp32c3.bin
           cp .pio/build/esp32s2/firmware.bin release_assets/firmware-esp32s2.bin
           
+          # Package Companion Tools & Rescue Utilities
+          cp tools/esp_manager.html release_assets/esp_manager.html
+          cp tools/ota_rescue_bridge.py release_assets/ota_rescue_bridge.py
+          cp tools/craftthingy_esp_ctl.py release_assets/craftthingy_esp_ctl.py
+          cp tools/flash_tool.py release_assets/flash_tool.py
+          cp tools/RESCUE_GUIDE.md release_assets/RESCUE_GUIDE.md
+
           cd release_assets
           for f in *.bin; do
             sha256sum "$f" > "${f}.sha256"
@@ -73,51 +80,139 @@ jobs:
           # Extract commit logs since previous tag
           PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || git tag -l --sort=-v:refname | sed -n '2p')
           if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"* %s (\`%h\` by @%an)")
+            FEAT_COMMITS=$(git log "${PREV_TAG}..HEAD" --grep="^feat" --pretty=format:"* %s (\`%h\` by @%an)" || true)
+            FIX_COMMITS=$(git log "${PREV_TAG}..HEAD" --grep="^fix" --pretty=format:"* %s (\`%h\` by @%an)" || true)
+            OTHER_COMMITS=$(git log "${PREV_TAG}..HEAD" --grep="^feat\|^fix" --invert-grep --pretty=format:"* %s (\`%h\` by @%an)" || true)
+            ALL_COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"* %s (\`%h\` by @%an)")
           else
-            COMMITS=$(git log -n 10 --pretty=format:"* %s (\`%h\` by @%an)")
+            FEAT_COMMITS=$(git log -n 15 --grep="^feat" --pretty=format:"* %s (\`%h\` by @%an)" || true)
+            FIX_COMMITS=$(git log -n 15 --grep="^fix" --pretty=format:"* %s (\`%h\` by @%an)" || true)
+            OTHER_COMMITS=$(git log -n 15 --grep="^feat\|^fix" --invert-grep --pretty=format:"* %s (\`%h\` by @%an)" || true)
+            ALL_COMMITS=$(git log -n 15 --pretty=format:"* %s (\`%h\` by @%an)")
           fi
+
+          # Extract binary sizes
+          SIZE_ESP01=$(wc -c < release_assets/firmware-esp01s.bin)
+          SIZE_ESP32=$(wc -c < release_assets/firmware-esp32.bin)
+          SIZE_ESP32S3=$(wc -c < release_assets/firmware-esp32s3.bin)
+          SIZE_ESP32C3=$(wc -c < release_assets/firmware-esp32c3.bin)
+          SIZE_ESP32S2=$(wc -c < release_assets/firmware-esp32s2.bin)
+
+          KB_ESP01=$((SIZE_ESP01 / 1024))
+          KB_ESP32=$((SIZE_ESP32 / 1024))
+          KB_ESP32S3=$((SIZE_ESP32S3 / 1024))
+          KB_ESP32C3=$((SIZE_ESP32C3 / 1024))
+          KB_ESP32S2=$((SIZE_ESP32S2 / 1024))
 
           cat << EOF > release_notes.md
           ## 🚀 CraftThingy ESP Core OTA Framework - ${TAG}
 
-          Official production release of the foundational embedded OTA and security framework for the **CraftThingy Digital Innovation** ecosystem.
+          Official production release of the foundational embedded OTA, security, and device management framework for the **CraftThingy Digital Innovation** ecosystem.
 
           ### 🚀 What's Changed in this Release
-          ${COMMITS}
+          EOF
+
+          if [ -n "$FEAT_COMMITS" ]; then
+            cat << EOF >> release_notes.md
+          #### ✨ New Features & Enhancements:
+          ${FEAT_COMMITS}
+
+          EOF
+          fi
+
+          if [ -n "$FIX_COMMITS" ]; then
+            cat << EOF >> release_notes.md
+          #### 🐛 Bug Fixes & Stability:
+          ${FIX_COMMITS}
+
+          EOF
+          fi
+
+          if [ -n "$OTHER_COMMITS" ]; then
+            cat << EOF >> release_notes.md
+          #### 🔧 Build, Refactoring & Infrastructure:
+          ${OTHER_COMMITS}
+
+          EOF
+          fi
+
+          if [ -z "$FEAT_COMMITS" ] && [ -z "$FIX_COMMITS" ]; then
+            cat << EOF >> release_notes.md
+          ${ALL_COMMITS}
+
+          EOF
+          fi
+
+          cat << EOF >> release_notes.md
+          ---
+
+          ### 📦 Pre-Compiled Firmware Binaries & Hardware Targets
+          Download the pre-compiled binary matching your board target:
+
+          | Target Board | Architecture | Flash Size / Mode | Binary Size | Max OTA Slot | Flash Utilization | Asset Name | Checksum |
+          |---|---|---|---|---|---|---|---|
+          | **ESP-01 / ESP-01S** | ESP8266EX | 1MB / DOUT (512K+512K OTA) | \${KB_ESP01} KB (\${SIZE_ESP01} B) | 512 KB | ~\$((SIZE_ESP01 * 100 / 512000))% | \`firmware-esp01s.bin\` | \`.sha256\` |
+          | **ESP32 Standard** | Dual-Core Xtensa | 4MB+ / DIO (1.9MB OTA) | \${KB_ESP32} KB (\${SIZE_ESP32} B) | 1,920 KB | ~\$((SIZE_ESP32 * 100 / 1966080))% | \`firmware-esp32.bin\` | \`.sha256\` |
+          | **ESP32-S3** | Dual-Core Xtensa | 8MB / QIO (3.3MB OTA) | \${KB_ESP32S3} KB (\${SIZE_ESP32S3} B) | 3,328 KB | ~\$((SIZE_ESP32S3 * 100 / 3407872))% | \`firmware-esp32s3.bin\` | \`.sha256\` |
+          | **ESP32-C3** | Single-Core RISC-V | 4MB / DIO (1.9MB OTA) | \${KB_ESP32C3} KB (\${SIZE_ESP32C3} B) | 1,920 KB | ~\$((SIZE_ESP32C3 * 100 / 1966080))% | \`firmware-esp32c3.bin\` | \`.sha256\` |
+          | **ESP32-S2** | Single-Core Xtensa | 4MB / DIO (1.9MB OTA) | \${KB_ESP32S2} KB (\${SIZE_ESP32S2} B) | 1,920 KB | ~\$((SIZE_ESP32S2 * 100 / 1966080))% | \`firmware-esp32s2.bin\` | \`.sha256\` |
 
           ---
 
-          ### 📦 Pre-Compiled Firmware Binaries
-          Download the appropriate binary matching your hardware target:
+          ### 🛠️ Companion Management & Rescue Tools
+          Directly download zero-install tools included in this release:
 
-          | Target Board | Architecture | Flash Size / Mode | Asset Name | Checksum |
-          |---|---|---|---|---|
-          | **ESP-01 / ESP-01S** | ESP8266EX | 1MB / DOUT (512K+512K OTA) | \`firmware-esp01s.bin\` | \`.sha256\` |
-          | **ESP32 Standard** | Dual-Core Xtensa | 4MB+ / DIO (1.9MB OTA) | \`firmware-esp32.bin\` | \`.sha256\` |
-          | **ESP32-S3** | Dual-Core Xtensa | 8MB / QIO (OTA) | \`firmware-esp32s3.bin\` | \`.sha256\` |
-          | **ESP32-C3** | Single-Core RISC-V | 4MB / DIO (OTA) | \`firmware-esp32c3.bin\` | \`.sha256\` |
-          | **ESP32-S2** | Single-Core Xtensa | 4MB / DIO (OTA) | \`firmware-esp32s2.bin\` | \`.sha256\` |
+          | Tool Asset | Type | Purpose | How to Run |
+          |---|---|---|---|
+          | **\`esp_manager.html\`** | Single-file Web App | Zero-install browser UI: Live telemetry, dual App/Core versions, Wi-Fi config, HMAC key ratchet | Double-click to open in any browser |
+          | **\`ota_rescue_bridge.py\`** | Python 3 Utility | 100% Wireless recovery bridge serving paced 1024-byte TLS records for buffer-limited ESPs | \`python ota_rescue_bridge.py --esp <IP>\` |
+          | **\`craftthingy_esp_ctl.py\`** | Python 3 CLI | Scriptable command-line administration, GitHub role switching & telemetry polling | \`python craftthingy_esp_ctl.py status --host <IP>\` |
+          | **\`flash_tool.py\`** | Python 3 Utility | Multi-board USB auto-detection, chip probing & serial flasher | \`python flash_tool.py probe\` |
+          | **\`RESCUE_GUIDE.md\`** | Markdown Guide | Step-by-step wireless recovery manual for AP mode and isolated environments | Read for troubleshooting |
+
+          ---
+
+          ### 🛡️ Core Capabilities & Features
+          - **Universal Multi-Architecture Support**: Native support for ESP8266, ESP32, ESP32-S3, ESP32-C3, and ESP32-S2.
+          - **Zero-Debris Dual-Slot OTA Engine**: In-memory two-phase flash write with automatic verification and hardware partition rollback.
+          - **CloudFront & GitHub TLS Compatibility**: BearSSL ECDHE cipher suites (ChaCha20-Poly1305 and AES-128-GCM) with modern TLS handshake compatibility.
+          - **Rolling HMAC-SHA256 Security Ratchet**: Replay-attack-proof authorization with rotating nonces and dual-tier master key authentication.
+          - **Zero-Install Web Dashboard (\`esp_manager.html\`)**: Single-file reactive interface with dual App/Core version monitoring, live Wi-Fi telemetry, and key ratchet control.
+          - **SoftAP Captive Portal**: Built-in hotspot fallback with DNS interception and instant Wi-Fi credential provisioning.
+          - **Wireless Rescue Bridge (\`ota_rescue_bridge.py\`)**: Local chunked TLS proxy for recovering legacy or buffer-limited devices without USB cables.
 
           ---
 
           ### ⚡ Installation & Flashing Instructions
 
-          #### 1. First-Time USB Flashing (\`flash_tool.py\`)
+          #### 1. Browser Web Manager (\`esp_manager.html\`)
+          1. Connect to the device Wi-Fi or access via your local network IP (e.g. \`http://192.168.2.228\`).
+          2. Double click \`esp_manager.html\` in your browser.
+          3. Click **Check & Trigger OTA Update** to immediately pull and install this release.
+
+          #### 2. First-Time USB Flashing (\`flash_tool.py\`)
           \`\`\`bash
           # Probe connected board
           python tools/flash_tool.py probe
 
-          # Flash ESP-01 / ESP-01S
+          # Flash target board (e.g. ESP-01 / ESP-01S)
           python tools/flash_tool.py flash --bin firmware-esp01s.bin
           \`\`\`
 
-          #### 2. Over-The-Air (OTA) Updates
-          Devices running \`craftthingy-esp-core-ota\` automatically check for updates every hour, or immediately via the REST API (\`POST /api/v1/ota/check\`) and the browser dashboard (\`esp_manager.html\`).
+          #### 3. Command Line Administration (\`craftthingy_esp_ctl.py\`)
+          \`\`\`bash
+          python tools/craftthingy_esp_ctl.py ota-check --host <ESP_IP> --key "<HMAC_KEY>"
+          \`\`\`
+
+          #### 4. Wireless Rescue Bridge (\`ota_rescue_bridge.py\`)
+          For devices in AP mode or legacy firmware needing chunked TLS streaming:
+          \`\`\`bash
+          python tools/ota_rescue_bridge.py --esp <ESP_IP> --target core --tag ${TAG}
+          \`\`\`
 
           ---
 
-          ### 🔐 Security & Integrity
+          ### 🔐 Security & Integrity Verification
           All binaries include companion \`.sha256\` checksum files. Verify integrity before flashing:
           \`\`\`bash
           sha256sum -c firmware-esp01s.bin.sha256

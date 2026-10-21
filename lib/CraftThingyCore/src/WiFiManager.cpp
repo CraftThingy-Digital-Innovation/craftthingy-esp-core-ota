@@ -81,6 +81,7 @@ bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t max
         // Reset to DHCP (Dynamic IP)
 #if defined(ESP8266)
         WiFi.config(0u, 0u, 0u);
+        wifi_station_dhcpc_start();
 #elif defined(ESP32)
         WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
 #endif
@@ -88,18 +89,29 @@ bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t max
 
     WiFi.begin(ssid, password);
 
-    // Give a brief window (up to 1.5s) to connect immediately without stalling HTTP responses
+    // Give a brief window (up to 2.5s) to connect immediately without stalling HTTP responses
     uint32_t startMs = millis();
-    while (WiFi.status() != WL_CONNECTED && (millis() - startMs) < 1500) {
+    while ((WiFi.status() != WL_CONNECTED
+#if defined(ESP8266)
+           || !WiFi.localIP().isSet()
+#elif defined(ESP32)
+           || WiFi.localIP() == IPAddress(0, 0, 0, 0)
+#endif
+           ) && (millis() - startMs) < 2500) {
         delay(50);
         yield();
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED
+#if defined(ESP8266)
+        && WiFi.localIP().isSet()
+#elif defined(ESP32)
+        && WiFi.localIP() != IPAddress(0, 0, 0, 0)
+#endif
+       ) {
         _state = WIFI_STATE_CONNECTED;
-        // CRITICAL SECURITY FIX: Explicitly shut down SoftAP when connected!
+        // Cleanly disable SoftAP without tearing down STA Wi-Fi link!
         WiFi.softAPdisconnect(true);
-        WiFi.mode(WIFI_STA);
         if (_dnsActive) {
             _dnsServer.stop();
             _dnsActive = false;
@@ -175,11 +187,16 @@ void WiFiManager::loop() {
                     delay(100);
                     yield();
                 }
-                if (WiFi.status() == WL_CONNECTED) {
+                if (WiFi.status() == WL_CONNECTED
+#if defined(ESP8266)
+                    && WiFi.localIP().isSet()
+#elif defined(ESP32)
+                    && WiFi.localIP() != IPAddress(0, 0, 0, 0)
+#endif
+                   ) {
                     _state = WIFI_STATE_CONNECTED;
                     // Terminate SoftAP once connected!
                     WiFi.softAPdisconnect(true);
-                    WiFi.mode(WIFI_STA);
                     if (_dnsActive) {
                         _dnsServer.stop();
                         _dnsActive = false;
@@ -189,12 +206,17 @@ void WiFiManager::loop() {
             }
         }
     } else if (_state == WIFI_STATE_CONNECTING) {
-        if (WiFi.status() == WL_CONNECTED) {
+        if (WiFi.status() == WL_CONNECTED
+#if defined(ESP8266)
+            && WiFi.localIP().isSet()
+#elif defined(ESP32)
+            && WiFi.localIP() != IPAddress(0, 0, 0, 0)
+#endif
+           ) {
             _state = WIFI_STATE_CONNECTED;
             _retryCount = 0;
             // Terminate SoftAP once connected!
             WiFi.softAPdisconnect(true);
-            WiFi.mode(WIFI_STA);
             if (_dnsActive) {
                 _dnsServer.stop();
                 _dnsActive = false;
@@ -224,7 +246,13 @@ void WiFiManager::loop() {
             }
         }
     } else if (_state == WIFI_STATE_CONNECTED) {
-        if (WiFi.status() != WL_CONNECTED) {
+        if (WiFi.status() != WL_CONNECTED
+#if defined(ESP8266)
+            || !WiFi.localIP().isSet()
+#elif defined(ESP32)
+            || WiFi.localIP() == IPAddress(0, 0, 0, 0)
+#endif
+           ) {
             _state = WIFI_STATE_CONNECTING;
             _connectingStartMs = millis();
         }
@@ -242,7 +270,11 @@ CraftWiFiState WiFiManager::getState() {
 }
 
 bool WiFiManager::isConnected() {
-    return (_state == WIFI_STATE_CONNECTED) && (WiFi.status() == WL_CONNECTED);
+#if defined(ESP8266)
+    return (_state == WIFI_STATE_CONNECTED) && (WiFi.status() == WL_CONNECTED) && WiFi.localIP().isSet();
+#elif defined(ESP32)
+    return (_state == WIFI_STATE_CONNECTED) && (WiFi.status() == WL_CONNECTED) && (WiFi.localIP() != IPAddress(0, 0, 0, 0));
+#endif
 }
 
 bool WiFiManager::isAPMode() {
@@ -250,33 +282,72 @@ bool WiFiManager::isAPMode() {
 }
 
 String WiFiManager::getIPAddress() {
-    if (isConnected()) {
-        return WiFi.localIP().toString();
+    IPAddress ip = WiFi.localIP();
+#if defined(ESP8266)
+    if (ip.isSet()) {
+        return ip.toString();
+    }
+#elif defined(ESP32)
+    if (ip != IPAddress(0, 0, 0, 0)) {
+        return ip.toString();
+    }
+#endif
+    DeviceConfig& cfg = ConfigStore::get();
+    if (cfg.wifiUseStaticIp && strlen(cfg.wifiStaticIp) > 0) {
+        return String(cfg.wifiStaticIp);
     }
     return "0.0.0.0";
 }
 
 String WiFiManager::getAPIPAddress() {
-    return WiFi.softAPIP().toString();
+    if (isAPMode() || (WiFi.getMode() & WIFI_AP)) {
+        IPAddress ap = WiFi.softAPIP();
+#if defined(ESP8266)
+        if (ap.isSet()) {
+            return ap.toString();
+        }
+#elif defined(ESP32)
+        if (ap != IPAddress(0, 0, 0, 0)) {
+            return ap.toString();
+        }
+#endif
+        return "192.168.4.1";
+    }
+    return "--";
 }
 
 String WiFiManager::getGatewayIP() {
     if (isConnected()) {
-        return WiFi.gatewayIP().toString();
+        IPAddress gw = WiFi.gatewayIP();
+#if defined(ESP8266)
+        if (gw.isSet()) return gw.toString();
+#elif defined(ESP32)
+        if (gw != IPAddress(0, 0, 0, 0)) return gw.toString();
+#endif
     }
     return "0.0.0.0";
 }
 
 String WiFiManager::getSubnetMask() {
     if (isConnected()) {
-        return WiFi.subnetMask().toString();
+        IPAddress sm = WiFi.subnetMask();
+#if defined(ESP8266)
+        if (sm.isSet()) return sm.toString();
+#elif defined(ESP32)
+        if (sm != IPAddress(0, 0, 0, 0)) return sm.toString();
+#endif
     }
     return "255.255.255.0";
 }
 
 String WiFiManager::getDnsIP() {
     if (isConnected()) {
-        return WiFi.dnsIP().toString();
+        IPAddress dns = WiFi.dnsIP();
+#if defined(ESP8266)
+        if (dns.isSet()) return dns.toString();
+#elif defined(ESP32)
+        if (dns != IPAddress(0, 0, 0, 0)) return dns.toString();
+#endif
     }
     return "0.0.0.0";
 }
