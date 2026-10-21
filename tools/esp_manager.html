@@ -222,7 +222,7 @@
       <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center;">
         <span style="font-size:0.75rem; color:var(--text-dim);">Connection Mode:</span>
         <button type="button" class="chip-btn" id="chipHomeWifi" onclick="switchToSavedStaIp()">🏠 Home Wi-Fi (<span id="chipStaIpText">Dynamic</span>)</button>
-        <button type="button" class="chip-btn" onclick="setHost('craftthingy.local')">🌐 mDNS (craftthingy.local)</button>
+        <button type="button" class="chip-btn" id="chipMdns" onclick="setHost('craftthingy-water-pump.local')">🌐 mDNS (craftthingy-water-pump.local)</button>
         <button type="button" class="chip-btn" onclick="setHost('192.168.4.1')">📶 Setup Hotspot (192.168.4.1)</button>
       </div>
     </div>
@@ -503,6 +503,14 @@
     }
   }
 
+  function toggleStaticIpFields() {
+    const chk = document.getElementById('useStaticIp');
+    const box = document.getElementById('staticIpFields');
+    if (box && chk) {
+      box.style.display = chk.checked ? 'block' : 'none';
+    }
+  }
+
   function setHost(host) {
     document.getElementById('espHost').value = host;
     localStorage.setItem('craftthingy_esp_host', host);
@@ -594,9 +602,26 @@
         document.getElementById('useStaticIp').checked = !!net.useStatic;
         toggleStaticIpFields();
         if (net.staticIp) document.getElementById('staticIp').value = net.staticIp;
-        if (net.gateway) document.getElementById('gatewayIp').value = net.gateway;
+        if (net.gateway && net.gateway !== '0.0.0.0') {
+          document.getElementById('gatewayIp').value = net.gateway;
+        } else if (net.staticIp) {
+          const parts = net.staticIp.split('.');
+          if (parts.length === 4) document.getElementById('gatewayIp').value = `${parts[0]}.${parts[1]}.${parts[2]}.1`;
+        }
         if (net.subnet) document.getElementById('subnetMask').value = net.subnet;
-        if (net.dns) document.getElementById('dns1Ip').value = net.dns;
+        if (net.dns && net.dns !== '0.0.0.0') {
+          document.getElementById('dns1Ip').value = net.dns;
+        } else {
+          document.getElementById('dns1Ip').value = document.getElementById('gatewayIp').value || '1.1.1.1';
+        }
+      }
+
+      // Dynamic mDNS Hostname in chip
+      const devMdnsName = (sys.name || 'craftthingy').toLowerCase().replace(/[\s_]+/g, '-') + '.local';
+      const chipMdns = document.getElementById('chipMdns');
+      if (chipMdns) {
+        chipMdns.textContent = `🌐 mDNS (${devMdnsName})`;
+        chipMdns.onclick = () => setHost(devMdnsName);
       }
 
       document.getElementById('valSeq').textContent = sec.rollingSequence !== undefined ? sec.rollingSequence : (data.rollingSequence || 1);
@@ -753,9 +778,15 @@
       const dns1 = document.getElementById('dns1Ip').value.trim();
       const dns2 = document.getElementById('dns2Ip').value.trim();
 
-      if (useStatic && !staticIp) {
-        alert("Please enter the Static IP Address or disable Static IP for DHCP.");
-        return;
+      if (useStatic) {
+        if (!staticIp) {
+          alert("Please enter the Static IP Address or uncheck 'Configure Manual Static IP' to use DHCP.");
+          return;
+        }
+        if (!gateway || gateway === '0.0.0.0') {
+          alert("Default Gateway cannot be 0.0.0.0 for Static IP. Enter your router's IP (e.g. 192.168.2.1) so the ESP can access the internet to download OTA updates.");
+          return;
+        }
       }
 
       log(`Sending WiFi credentials for "${ssid}" (${useStatic ? 'Static IP: ' + staticIp : 'DHCP Dynamic IP'})...`);
