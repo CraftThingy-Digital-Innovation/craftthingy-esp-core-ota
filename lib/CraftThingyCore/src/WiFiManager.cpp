@@ -2,9 +2,7 @@
 #include "ConfigStore.h"
 
 #if defined(ESP8266)
-    #if defined(CRAFT_ENABLE_ESP8266_MDNS)
-        #include <ESP8266mDNS.h>
-    #endif
+    #include <ESP8266mDNS.h>
 #elif defined(ESP32)
     #include <ESPmDNS.h>
 #endif
@@ -148,12 +146,10 @@ void WiFiManager::initMDNS() {
     mdnsName.toLowerCase();
 
 #if defined(ESP8266)
-    #if defined(CRAFT_ENABLE_ESP8266_MDNS)
     if (MDNS.begin(mdnsName.c_str())) {
         MDNS.addService("http", "tcp", 80);
         _mdnsActive = true;
     }
-    #endif
 #elif defined(ESP32)
     if (MDNS.begin(mdnsName.c_str())) {
         MDNS.addService("http", "tcp", 80);
@@ -234,7 +230,7 @@ void WiFiManager::loop() {
         }
     }
 
-#if defined(ESP8266) && defined(CRAFT_ENABLE_ESP8266_MDNS)
+#if defined(ESP8266)
     if (_mdnsActive) {
         MDNS.update();
     }
