@@ -45,9 +45,14 @@ bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t max
     _connectingStartMs = millis();
     _retryCount = 0;
 
-    // Use WIFI_AP_STA so the softAP connection stays active!
-    // This allows in-flight HTTP requests to complete and avoids dropping the user's connection.
-    WiFi.mode(WIFI_AP_STA);
+    // If we were in AP portal mode (e.g. user just posted /setup), keep WIFI_AP_STA temporarily
+    // so in-flight HTTP response packets can be delivered back to the client.
+    // If not in AP portal mode, start strictly in WIFI_STA to avoid broadcasting an open hotspot!
+    if (_state == WIFI_STATE_AP_PORTAL || (WiFi.getMode() & WIFI_AP)) {
+        WiFi.mode(WIFI_AP_STA);
+    } else {
+        WiFi.mode(WIFI_STA);
+    }
 
     DeviceConfig& cfg = ConfigStore::get();
     String hostName = (strlen(cfg.deviceName) > 0) ? String(cfg.deviceName) : _apSSID;
@@ -94,6 +99,9 @@ bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t max
 
     if (WiFi.status() == WL_CONNECTED) {
         _state = WIFI_STATE_CONNECTED;
+        // CRITICAL SECURITY FIX: Explicitly shut down SoftAP when connected!
+        WiFi.softAPdisconnect(true);
+        WiFi.mode(WIFI_STA);
         if (_dnsActive) {
             _dnsServer.stop();
             _dnsActive = false;
@@ -160,8 +168,8 @@ void WiFiManager::loop() {
             _dnsServer.processNextRequest();
         }
 
-        // Periodic background attempt every 60 seconds if configured
-        if (ConfigStore::isConfigured() && (millis() - _lastReconnectAttempt > 60000)) {
+        // Periodic background attempt every 30 seconds if configured
+        if (ConfigStore::isConfigured() && (millis() - _lastReconnectAttempt > 30000)) {
             _lastReconnectAttempt = millis();
             DeviceConfig& cfg = ConfigStore::get();
             if (WiFi.status() != WL_CONNECTED) {
@@ -173,6 +181,9 @@ void WiFiManager::loop() {
                 }
                 if (WiFi.status() == WL_CONNECTED) {
                     _state = WIFI_STATE_CONNECTED;
+                    // Terminate SoftAP once connected!
+                    WiFi.softAPdisconnect(true);
+                    WiFi.mode(WIFI_STA);
                     if (_dnsActive) {
                         _dnsServer.stop();
                         _dnsActive = false;
@@ -185,15 +196,36 @@ void WiFiManager::loop() {
         if (WiFi.status() == WL_CONNECTED) {
             _state = WIFI_STATE_CONNECTED;
             _retryCount = 0;
+            // Terminate SoftAP once connected!
+            WiFi.softAPdisconnect(true);
+            WiFi.mode(WIFI_STA);
             if (_dnsActive) {
                 _dnsServer.stop();
                 _dnsActive = false;
             }
             initMDNS();
         } else if (millis() - _connectingStartMs > 30000) {
-            // 30-second connection timeout, fallback to AP portal
-            _state = WIFI_STATE_FAILED;
-            startAPPortal();
+            if (ConfigStore::isConfigured()) {
+                // If device was previously configured, do NOT pop open an unauthenticated hotspot
+                // on a transient 30-second Wi-Fi drop or router reboot!
+                // Keep retrying station connection in background silently.
+                // Only start AP portal if disconnected continuously for > 180 seconds (3 minutes).
+                if (millis() - _connectingStartMs > 180000) {
+                    _state = WIFI_STATE_FAILED;
+                    startAPPortal();
+                } else {
+                    static uint32_t lastStaRetry = 0;
+                    if (millis() - lastStaRetry > 10000) {
+                        lastStaRetry = millis();
+                        DeviceConfig& cfg = ConfigStore::get();
+                        WiFi.begin(cfg.wifiSsid, cfg.wifiPassword);
+                    }
+                }
+            } else {
+                // Unconfigured on initial boot: start AP portal for setup
+                _state = WIFI_STATE_FAILED;
+                startAPPortal();
+            }
         }
     } else if (_state == WIFI_STATE_CONNECTED) {
         if (WiFi.status() != WL_CONNECTED) {

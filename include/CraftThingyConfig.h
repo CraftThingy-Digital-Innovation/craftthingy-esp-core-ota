@@ -39,7 +39,7 @@
 // =================================================================
 // Default Configuration Constants
 // =================================================================
-#define CRAFT_CORE_VERSION          "1.0.0"
+#define CRAFT_CORE_VERSION          "1.1.0"
 #define CRAFT_DEFAULT_ORG           "CraftThingy-Digital-Innovation"
 #define CRAFT_DEFAULT_CORE_REPO     "craftthingy-esp-core-ota"
 

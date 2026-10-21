@@ -115,17 +115,54 @@ bool RestApi::isRequestAuthorized(ApiServerType& server, String& outMethod) {
         }
     }
 
+    // Tier 2b: X-Master-Key Header Authentication
+    String masterKey = server.header("X-Master-Key");
+    if (masterKey.length() > 0) {
+        masterKey.trim();
+        if (CraftThingyCrypto::constantTimeEquals(masterKey, String(cfg.masterSecretKey)) ||
+            CraftThingyCrypto::constantTimeEquals(masterKey, String(cfg.currentRollingKey))) {
+            outMethod = "master_key_header";
+            return true;
+        }
+    }
+
+    // Tier 2c: Query Parameter Token (?key= or ?token=)
+    if (server.hasArg("key") || server.hasArg("token")) {
+        String queryToken = server.hasArg("key") ? server.arg("key") : server.arg("token");
+        queryToken.trim();
+        if (queryToken.length() > 0 &&
+            (CraftThingyCrypto::constantTimeEquals(queryToken, String(cfg.masterSecretKey)) ||
+             CraftThingyCrypto::constantTimeEquals(queryToken, String(cfg.currentRollingKey)))) {
+            outMethod = "query_token";
+            return true;
+        }
+    }
+
     // Tier 3: Admin Basic Auth
     if (server.authenticate("admin", cfg.adminPasswordHash)) {
         outMethod = "basic_auth";
         return true;
     }
 
-    // Tier 4: SoftAP Setup Mode (Permits mobile phone captive portal without HMAC keys)
+    // Tier 4: Read-Only Dashboard Telemetry (Permits local web browser dashboard monitoring)
+    String uri = server.uri();
+    if (server.method() == HTTP_GET) {
+        if (uri == "/" || uri == "/setup" || 
+            uri == "/api/v1/system/status" || uri == "/api/v1/system/name" ||
+            uri == "/api/v1/device/status" || uri == "/api/v1/pump/status" ||
+            uri == "/api/v1/wifi/scan" || uri == "/api/v1/hardware/pins" ||
+            uri == "/api/status" || uri == "/api/controller/status") {
+            outMethod = "dashboard_telemetry_get";
+            return true;
+        }
+    }
+
+    // Tier 5: SoftAP Setup Mode (Permits mobile phone captive portal without HMAC keys)
     if (WiFiManager::isAPMode()) {
-        String uri = server.uri();
         if (uri == "/" || uri == "/setup" || uri.startsWith("/api/v1/wifi/") || 
             uri == "/api/v1/system/status" || uri == "/api/v1/system/name" || uri == "/api/v1/device/name" ||
+            uri == "/api/v1/device/status" || uri == "/api/v1/pump/status" ||
+            uri == "/api/v1/device/command" || uri == "/api/v1/pump/command" ||
             uri == "/api/v1/hardware/pins" || uri == "/api/hardware/pins") {
             outMethod = "ap_portal_local";
             return true;
@@ -305,6 +342,7 @@ void RestApi::handleControllerCommand() {
     if (cmd.length() == 0 && _server.hasArg("plain")) {
         String body = _server.arg("plain");
         int idx = body.indexOf("\"cmd\"");
+        if (idx < 0) idx = body.indexOf("\"command\"");
         if (idx >= 0) {
             int start = body.indexOf(':', idx) + 1;
             int q1 = body.indexOf('"', start);
