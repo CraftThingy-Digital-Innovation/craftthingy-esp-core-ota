@@ -808,8 +808,13 @@
     if (attempt >= 10) {
       otaPollActive = false;
       if (btn) { btn.disabled = false; btn.textContent = "Check OTA Now"; }
-      if (pMsg && pMsg.textContent.includes("querying")) {
-        pMsg.textContent = "Check complete. Review OTA Status in Card 2.";
+      const currentOta = document.getElementById('valOta').textContent || "Idle";
+      if (pMsg) {
+        if (currentOta === "Idle") {
+          pMsg.textContent = "Check finished: Device returned to Idle. Note: The ESP must be connected to home Wi-Fi with internet access to check GitHub releases.";
+        } else {
+          pMsg.textContent = `Check finished: Device reported '${currentOta}' (see Live Device Status above).`;
+        }
       }
       return;
     }
