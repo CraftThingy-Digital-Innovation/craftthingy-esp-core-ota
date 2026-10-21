@@ -187,12 +187,12 @@
   <div id="unreachableBanner" style="display:none; background:#450a0a; border:1px solid #ef4444; border-left:4px solid #f87171; border-radius:8px; padding:14px 18px; margin-bottom:20px; font-size:0.92rem; line-height:1.5;">
     <strong style="color:#f87171; font-size:1.02rem;">⚠️ Could Not Reach ESP at <span id="unreachableIp">192.168.4.1</span></strong>
     <div style="color:#fecaca; margin-top:6px;">
-      If your device is already connected to your home Wi-Fi (e.g. <strong>Neun 4G</strong>), it is no longer reachable at <code>192.168.4.1</code>.<br>
-      Its assigned dynamic router IP is: <strong style="color:#fff; font-size:1rem;" id="suggestedStaIp">192.168.2.228</strong>
+      If your device is already connected to your home Wi-Fi, it is no longer reachable at <code>192.168.4.1</code>.<br>
+      <span id="suggestedStaMsg">Last known local router IP: <strong style="color:#fff; font-size:1rem;" id="suggestedStaIp">None saved</strong></span>
     </div>
     <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-      <button type="button" style="background:#ef4444; color:#fff; font-weight:700; flex:none; padding:8px 16px; border-radius:6px; cursor:pointer;" onclick="setHost('192.168.2.228')">👉 Switch to Home Wi-Fi IP (192.168.2.228)</button>
-      <button type="button" class="secondary" style="flex:none; padding:8px 16px;" onclick="setHost('craftthingy-5371.local')">Try mDNS (craftthingy-5371.local)</button>
+      <button type="button" id="btnSwitchSta" style="background:#ef4444; color:#fff; font-weight:700; flex:none; padding:8px 16px; border-radius:6px; cursor:pointer;" onclick="switchToSavedStaIp()">👉 Switch to Home Wi-Fi IP</button>
+      <button type="button" class="secondary" style="flex:none; padding:8px 16px;" onclick="setHost('craftthingy.local')">Try mDNS (craftthingy.local)</button>
     </div>
   </div>
 
@@ -202,7 +202,7 @@
     <div style="color:#d1fae5; margin-top:6px;">
       The ESP is now connected to <strong id="discoveredSsid"></strong>.<br>
       Assigned Local Network IP: <strong style="font-size:1.15rem; color:#fff;" id="discoveredIp">192.168.1.xxx</strong><br>
-      <span style="font-size:0.85rem; color:#a7f3d0;">mDNS Hostname: <code id="discoveredMdns" style="background:#022c22; padding:2px 6px; border-radius:4px;">http://craftthingy-5371.local</code></span>
+      <span style="font-size:0.85rem; color:#a7f3d0;">mDNS Hostname: <code id="discoveredMdns" style="background:#022c22; padding:2px 6px; border-radius:4px;">http://craftthingy.local</code></span>
     </div>
     <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
       <button style="background:#10b981; color:#064e3b; font-weight:700; flex:none; padding:8px 16px;" onclick="switchToDiscoveredIp()">Switch Manager to this IP</button>
@@ -215,12 +215,15 @@
     <h2>1. Connection & Security Key</h2>
     <div class="form-group">
       <label>ESP Device Address (IP or Hostname)</label>
-      <input type="text" id="espHost" value="192.168.4.1">
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="espHost" value="192.168.4.1" placeholder="e.g. 192.168.1.50 or craftthingy.local">
+        <button style="flex:0 0 130px;" onclick="fetchStatus()">Connect</button>
+      </div>
       <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center;">
-        <span style="font-size:0.75rem; color:var(--text-dim);">Quick Select:</span>
-        <button type="button" class="chip-btn" onclick="setHost('192.168.2.228')">🏠 Home Wi-Fi (192.168.2.228)</button>
-        <button type="button" class="chip-btn" onclick="setHost('192.168.4.1')">📶 Setup AP (192.168.4.1)</button>
-        <button type="button" class="chip-btn" onclick="setHost('craftthingy-5371.local')">🌐 mDNS (.local)</button>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Connection Mode:</span>
+        <button type="button" class="chip-btn" id="chipHomeWifi" onclick="switchToSavedStaIp()">🏠 Home Wi-Fi (<span id="chipStaIpText">Dynamic</span>)</button>
+        <button type="button" class="chip-btn" onclick="setHost('craftthingy.local')">🌐 mDNS (craftthingy.local)</button>
+        <button type="button" class="chip-btn" onclick="setHost('192.168.4.1')">📶 Setup Hotspot (192.168.4.1)</button>
       </div>
     </div>
     <div class="form-group">
@@ -470,6 +473,36 @@
     return toast;
   }
 
+  function updateHostChipLabels(ip) {
+    const textEl = document.getElementById('chipStaIpText');
+    const suggEl = document.getElementById('suggestedStaIp');
+    const btnSwitch = document.getElementById('btnSwitchSta');
+    if (ip && ip !== '0.0.0.0' && ip !== '192.168.4.1') {
+      if (textEl) textEl.textContent = ip;
+      if (suggEl) suggEl.textContent = ip;
+      if (btnSwitch) {
+        btnSwitch.textContent = `👉 Switch to Home Wi-Fi IP (${ip})`;
+        btnSwitch.style.display = 'inline-block';
+      }
+    } else {
+      if (textEl) textEl.textContent = 'Enter IP';
+      if (suggEl) suggEl.textContent = 'None saved yet';
+      if (btnSwitch) btnSwitch.style.display = 'none';
+    }
+  }
+
+  function switchToSavedStaIp() {
+    const lastSta = localStorage.getItem('craftthingy_esp_last_sta_ip');
+    if (lastSta && lastSta !== '192.168.4.1' && lastSta !== '0.0.0.0') {
+      setHost(lastSta);
+    } else {
+      const promptIp = prompt("Enter your ESP's Home Wi-Fi IP (e.g. 192.168.1.150):");
+      if (promptIp && promptIp.trim()) {
+        setHost(promptIp.trim());
+      }
+    }
+  }
+
   function setHost(host) {
     document.getElementById('espHost').value = host;
     localStorage.setItem('craftthingy_esp_host', host);
@@ -595,13 +628,14 @@
     } catch (e) {
       log(`Error fetching status: ${e.message}`);
       const unreach = document.getElementById('unreachableBanner');
+      const lastKnown = localStorage.getItem('craftthingy_esp_last_sta_ip');
       if (unreach) {
         document.getElementById('unreachableIp').textContent = host;
-        const lastKnown = localStorage.getItem('craftthingy_esp_last_sta_ip') || '192.168.2.228';
-        document.getElementById('suggestedStaIp').textContent = lastKnown;
+        updateHostChipLabels(lastKnown);
         unreach.style.display = 'block';
       }
-      showToast('error', 'Connection Failed', `Could not reach ESP at ${host}. If connected to Wi-Fi, try 192.168.2.228`, 5000);
+      const hint = lastKnown ? `Try switching to your home Wi-Fi IP (${lastKnown})` : 'If connected to home Wi-Fi, click Home Wi-Fi or mDNS';
+      showToast('error', 'Connection Failed', `Could not reach ESP at ${host}. ${hint}`, 5000);
     }
   }
   function onRepoPresetChanged() {
@@ -921,15 +955,14 @@
   }
 
   window.onload = () => {
+    const lastSta = localStorage.getItem('craftthingy_esp_last_sta_ip');
+    updateHostChipLabels(lastSta);
+
     const savedHost = localStorage.getItem('craftthingy_esp_host');
     if (savedHost) {
       document.getElementById('espHost').value = savedHost;
-    } else {
-      // Suggest home wifi IP if previously discovered
-      const lastSta = localStorage.getItem('craftthingy_esp_last_sta_ip');
-      if (lastSta) {
-        document.getElementById('espHost').value = lastSta;
-      }
+    } else if (lastSta && lastSta !== '192.168.4.1' && lastSta !== '0.0.0.0') {
+      document.getElementById('espHost').value = lastSta;
     }
     fetchStatus();
   };
