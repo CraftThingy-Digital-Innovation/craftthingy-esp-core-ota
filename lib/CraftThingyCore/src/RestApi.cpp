@@ -854,7 +854,8 @@ void RestApi::handleRootPortal() {
     _server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     _server.sendHeader("Pragma", "no-cache");
     _server.sendHeader("Expires", "-1");
-    _server.send(200, "text/html", FPSTR(CAPTIVE_PORTAL_HTML));
+    _server.sendHeader("Content-Encoding", "gzip");
+    _server.send_P(200, "text/html", (const char*)CAPTIVE_PORTAL_HTML_GZ, sizeof(CAPTIVE_PORTAL_HTML_GZ));
 }
 
 void RestApi::handleSetupPost() {

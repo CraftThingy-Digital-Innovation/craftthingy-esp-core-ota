@@ -70,10 +70,23 @@ jobs:
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
+          # Extract commit logs since previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || git tag -l --sort=-v:refname | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"* %s (\`%h\` by @%an)")
+          else
+            COMMITS=$(git log -n 10 --pretty=format:"* %s (\`%h\` by @%an)")
+          fi
+
           cat << EOF > release_notes.md
           ## 🚀 CraftThingy ESP Core OTA Framework - ${TAG}
 
           Official production release of the foundational embedded OTA and security framework for the **CraftThingy Digital Innovation** ecosystem.
+
+          ### 🚀 What's Changed in this Release
+          ${COMMITS}
+
+          ---
 
           ### 📦 Pre-Compiled Firmware Binaries
           Download the appropriate binary matching your hardware target:

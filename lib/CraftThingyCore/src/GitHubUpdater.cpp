@@ -469,6 +469,7 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
             return true;
         } else {
             _lastError = "OTA verification failed (" + String(Update.getError()) + ")";
+            Update.end(false);
             _status = OTA_STATUS_FAILED;
             return false;
         }
