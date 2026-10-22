@@ -212,6 +212,8 @@ void RestApi::setupRoutes() {
     // WiFi Networking & Provisioning
     _server.on("/api/v1/wifi/scan", HTTP_GET, handleWifiScan);
     _server.on("/api/v1/wifi/config", HTTP_POST, handleWifiConfig);
+    _server.on("/api/v1/network/ip", HTTP_POST, handleIpConfig);
+    _server.on("/api/v1/wifi/ip", HTTP_POST, handleIpConfig);
     _server.on("/api/v1/wifi/ap", HTTP_GET, handleGetAPConfig);
     _server.on("/api/v1/wifi/ap", HTTP_POST, handleSetAPConfig);
     _server.on("/api/v1/wifi/ap-config", HTTP_POST, handleSetAPConfig);
@@ -443,8 +445,18 @@ void RestApi::handleWifiConfig() {
     }
 
     ssid.trim();
+    DeviceConfig& cfg = ConfigStore::get();
+
+    // If SSID was not passed in request, reuse existing saved network credentials
+    if (ssid.length() == 0 && strlen(cfg.wifiSsid) > 0) {
+        ssid = String(cfg.wifiSsid);
+    }
+    if (pass.length() == 0 && strlen(cfg.wifiPassword) > 0) {
+        pass = String(cfg.wifiPassword);
+    }
+
     if (ssid.length() == 0) {
-        sendStandardError(400, "Missing required 'ssid' parameter");
+        sendStandardError(400, "Missing required 'ssid' parameter (no saved Wi-Fi network found)");
         return;
     }
 
@@ -458,6 +470,75 @@ void RestApi::handleWifiConfig() {
     sendStandardSuccess("WiFi credentials saved. Connecting in background...");
 
     WiFiManager::connectSTA(ssid.c_str(), pass.c_str(), CRAFT_WIFI_MAX_RETRIES);
+}
+
+void RestApi::handleIpConfig() {
+    String authMethod;
+    if (!isRequestAuthorized(_server, authMethod)) {
+        sendStandardError(401, "Unauthorized: Valid HMAC signature or Bearer token required", authMethod);
+        return;
+    }
+
+    bool useStatic = false;
+    String staticIp = "";
+    String gateway = "";
+    String subnet = "255.255.255.0";
+    String dns1 = "";
+    String dns2 = "";
+
+    if (_server.hasArg("use_static")) {
+        useStatic = (_server.arg("use_static") == "true" || _server.arg("use_static") == "1");
+    } else if (_server.hasArg("useStatic")) {
+        useStatic = (_server.arg("useStatic") == "true" || _server.arg("useStatic") == "1");
+    }
+    if (_server.hasArg("static_ip")) staticIp = _server.arg("static_ip");
+    else if (_server.hasArg("staticIp")) staticIp = _server.arg("staticIp");
+    if (_server.hasArg("gateway")) gateway = _server.arg("gateway");
+    if (_server.hasArg("subnet")) subnet = _server.arg("subnet");
+    if (_server.hasArg("dns1")) dns1 = _server.arg("dns1");
+    if (_server.hasArg("dns2")) dns2 = _server.arg("dns2");
+
+    if (_server.hasArg("plain")) {
+        String body = _server.arg("plain");
+        auto extractJson = [&](const String& key) -> String {
+            int idx = body.indexOf("\"" + key + "\"");
+            if (idx < 0) return "";
+            int start = body.indexOf(':', idx) + 1;
+            int q1 = body.indexOf('"', start);
+            int q2 = body.indexOf('"', q1 + 1);
+            if (q1 >= 0 && q2 > q1) return body.substring(q1 + 1, q2);
+            return "";
+        };
+
+        if (!useStatic && (body.indexOf("\"useStatic\":true") >= 0 || body.indexOf("\"use_static\":true") >= 0)) {
+            useStatic = true;
+        }
+        if (staticIp.length() == 0) staticIp = extractJson("staticIp");
+        if (staticIp.length() == 0) staticIp = extractJson("static_ip");
+        if (gateway.length() == 0) gateway = extractJson("gateway");
+        if (subnet.length() == 0 || subnet == "255.255.255.0") {
+            String sub = extractJson("subnet");
+            if (sub.length() > 0) subnet = sub;
+        }
+        if (dns1.length() == 0) dns1 = extractJson("dns1");
+        if (dns2.length() == 0) dns2 = extractJson("dns2");
+    }
+
+    staticIp.trim();
+    gateway.trim();
+    subnet.trim();
+    dns1.trim();
+    dns2.trim();
+
+    if (useStatic && staticIp.length() == 0) {
+        sendStandardError(400, "Missing required 'staticIp' parameter for static IP configuration");
+        return;
+    }
+
+    ConfigStore::setIpConfig(useStatic, staticIp, gateway, subnet, dns1, dns2);
+    sendStandardSuccess("IP configuration updated. Reapplying network settings in background...");
+
+    WiFiManager::applyIpConfig();
 }
 
 void RestApi::handleGitHubConfig() {

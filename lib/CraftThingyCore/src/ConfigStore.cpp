@@ -240,26 +240,72 @@ bool ConfigStore::setWiFiConfig(const String& ssid, const String& pass,
                                 const String& subnet,
                                 const String& dns1,
                                 const String& dns2) {
-    strncpy(_config.wifiSsid, ssid.c_str(), sizeof(_config.wifiSsid) - 1);
-    _config.wifiSsid[sizeof(_config.wifiSsid) - 1] = '\0';
-    strncpy(_config.wifiPassword, pass.c_str(), sizeof(_config.wifiPassword) - 1);
-    _config.wifiPassword[sizeof(_config.wifiPassword) - 1] = '\0';
+    if (ssid.length() > 0) {
+        strncpy(_config.wifiSsid, ssid.c_str(), sizeof(_config.wifiSsid) - 1);
+        _config.wifiSsid[sizeof(_config.wifiSsid) - 1] = '\0';
+    }
+    if (pass.length() > 0) {
+        strncpy(_config.wifiPassword, pass.c_str(), sizeof(_config.wifiPassword) - 1);
+        _config.wifiPassword[sizeof(_config.wifiPassword) - 1] = '\0';
+    }
 
     _config.wifiUseStaticIp = useStatic;
     if (useStatic) {
-        strncpy(_config.wifiStaticIp, staticIp.c_str(), sizeof(_config.wifiStaticIp) - 1);
-        _config.wifiStaticIp[sizeof(_config.wifiStaticIp) - 1] = '\0';
-        strncpy(_config.wifiGateway, gateway.c_str(), sizeof(_config.wifiGateway) - 1);
-        _config.wifiGateway[sizeof(_config.wifiGateway) - 1] = '\0';
-        strncpy(_config.wifiSubnet, subnet.c_str(), sizeof(_config.wifiSubnet) - 1);
-        _config.wifiSubnet[sizeof(_config.wifiSubnet) - 1] = '\0';
-        strncpy(_config.wifiDns1, dns1.c_str(), sizeof(_config.wifiDns1) - 1);
-        _config.wifiDns1[sizeof(_config.wifiDns1) - 1] = '\0';
-        strncpy(_config.wifiDns2, dns2.c_str(), sizeof(_config.wifiDns2) - 1);
-        _config.wifiDns2[sizeof(_config.wifiDns2) - 1] = '\0';
+        if (staticIp.length() > 0) {
+            strncpy(_config.wifiStaticIp, staticIp.c_str(), sizeof(_config.wifiStaticIp) - 1);
+            _config.wifiStaticIp[sizeof(_config.wifiStaticIp) - 1] = '\0';
+        }
+        if (gateway.length() > 0) {
+            strncpy(_config.wifiGateway, gateway.c_str(), sizeof(_config.wifiGateway) - 1);
+            _config.wifiGateway[sizeof(_config.wifiGateway) - 1] = '\0';
+        }
+        if (subnet.length() > 0) {
+            strncpy(_config.wifiSubnet, subnet.c_str(), sizeof(_config.wifiSubnet) - 1);
+            _config.wifiSubnet[sizeof(_config.wifiSubnet) - 1] = '\0';
+        }
+        if (dns1.length() > 0) {
+            strncpy(_config.wifiDns1, dns1.c_str(), sizeof(_config.wifiDns1) - 1);
+            _config.wifiDns1[sizeof(_config.wifiDns1) - 1] = '\0';
+        }
+        if (dns2.length() > 0) {
+            strncpy(_config.wifiDns2, dns2.c_str(), sizeof(_config.wifiDns2) - 1);
+            _config.wifiDns2[sizeof(_config.wifiDns2) - 1] = '\0';
+        }
     }
 
     _config.configured = true;
+    return save();
+}
+
+bool ConfigStore::setIpConfig(bool useStatic,
+                              const String& staticIp,
+                              const String& gateway,
+                              const String& subnet,
+                              const String& dns1,
+                              const String& dns2) {
+    _config.wifiUseStaticIp = useStatic;
+    if (useStatic) {
+        if (staticIp.length() > 0) {
+            strncpy(_config.wifiStaticIp, staticIp.c_str(), sizeof(_config.wifiStaticIp) - 1);
+            _config.wifiStaticIp[sizeof(_config.wifiStaticIp) - 1] = '\0';
+        }
+        if (gateway.length() > 0) {
+            strncpy(_config.wifiGateway, gateway.c_str(), sizeof(_config.wifiGateway) - 1);
+            _config.wifiGateway[sizeof(_config.wifiGateway) - 1] = '\0';
+        }
+        if (subnet.length() > 0) {
+            strncpy(_config.wifiSubnet, subnet.c_str(), sizeof(_config.wifiSubnet) - 1);
+            _config.wifiSubnet[sizeof(_config.wifiSubnet) - 1] = '\0';
+        }
+        if (dns1.length() > 0) {
+            strncpy(_config.wifiDns1, dns1.c_str(), sizeof(_config.wifiDns1) - 1);
+            _config.wifiDns1[sizeof(_config.wifiDns1) - 1] = '\0';
+        }
+        if (dns2.length() > 0) {
+            strncpy(_config.wifiDns2, dns2.c_str(), sizeof(_config.wifiDns2) - 1);
+            _config.wifiDns2[sizeof(_config.wifiDns2) - 1] = '\0';
+        }
+    }
     return save();
 }
 

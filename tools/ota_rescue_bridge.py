@@ -37,7 +37,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Tuple, Optional, Dict, Any
 
 TOOL_VERSION = "1.1.6"
-CORE_VERSION = "1.1.1"
+CORE_VERSION = "1.1.2"
 
 if hasattr(sys.stdout, "reconfigure"):
     try:

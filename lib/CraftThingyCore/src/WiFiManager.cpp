@@ -415,3 +415,12 @@ void WiFiManager::setDeviceName(const String& name) {
 #endif
     // Intentionally does NOT alter _apSSID or SoftAP hotspot name!
 }
+
+bool WiFiManager::applyIpConfig() {
+    DeviceConfig& cfg = ConfigStore::get();
+    if (strlen(cfg.wifiSsid) > 0) {
+        return connectSTA(cfg.wifiSsid, cfg.wifiPassword, CRAFT_WIFI_MAX_RETRIES);
+    }
+    return false;
+}
+

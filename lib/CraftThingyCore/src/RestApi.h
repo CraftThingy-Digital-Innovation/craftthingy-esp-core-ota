@@ -34,6 +34,7 @@ private:
     static void handleStatus();
     static void handleWifiScan();
     static void handleWifiConfig();
+    static void handleIpConfig();
     static void handleGitHubConfig();
     static void handleTriggerUpdate();
     static void handleRotateKey();

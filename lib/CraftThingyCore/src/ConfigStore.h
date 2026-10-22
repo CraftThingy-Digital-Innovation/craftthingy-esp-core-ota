@@ -70,6 +70,14 @@ public:
                               const String& dns1 = "",
                               const String& dns2 = "");
 
+    // Update IP Addressing configuration (DHCP vs Static IP, Subnet, Gateway, DNS) independently of WiFi credentials
+    static bool setIpConfig(bool useStatic,
+                            const String& staticIp = "",
+                            const String& gateway = "",
+                            const String& subnet = "255.255.255.0",
+                            const String& dns1 = "",
+                            const String& dns2 = "");
+
     // Global Hardware GPIO pin role mapping (persisted across OTA updates)
     static int8_t getPin(const char* role, int8_t defaultGpio = -1);
     static bool setPin(const char* role, int8_t gpio, uint8_t flags = 0);

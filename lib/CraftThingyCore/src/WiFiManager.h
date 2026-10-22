@@ -52,6 +52,9 @@ public:
     // Scan nearby networks and return JSON list
     static String scanNetworksJson();
 
+    // Reapply IP configuration (DHCP or Static IP) to active connection without re-entering credentials
+    static bool applyIpConfig();
+
 private:
     static CraftWiFiState _state;
     static DNSServer _dnsServer;
