@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CraftThingy Digital Innovation - Over-The-Air Rescue Bridge (v1.1.6 / Core v1.1.6)
+CraftThingy Digital Innovation - Over-The-Air Rescue Bridge (v1.1.6 / Core v1.1.1)
 =============================================================================
 Bypasses the ESP8266 legacy BearSSL 4KB input buffer limit (BR_ERR_TOO_LARGE)
 and AWS S3 TLS connection drops by acting as an all-in-one local chunked OTA
@@ -37,7 +37,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Tuple, Optional, Dict, Any
 
 TOOL_VERSION = "1.1.6"
-CORE_VERSION = "1.1.6"
+CORE_VERSION = "1.1.1"
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
