@@ -17,6 +17,11 @@ bool WiFiManager::_dnsActive = false;
 bool WiFiManager::_mdnsActive = false;
 
 void WiFiManager::init() {
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(false);
+    _state = WIFI_STATE_IDLE;
+
     DeviceConfig& cfg = ConfigStore::get();
     if (strlen(cfg.apSsid) > 0) {
         _apSSID = String(cfg.apSsid);
@@ -27,10 +32,6 @@ void WiFiManager::init() {
         suffix.toUpperCase();
         _apSSID = "CraftThingy-" + suffix;
     }
-
-    WiFi.persistent(false);
-    WiFi.disconnect(true);
-    _state = WIFI_STATE_IDLE;
 }
 
 bool WiFiManager::connectSTA(const char* ssid, const char* password, uint8_t maxRetries) {
