@@ -940,6 +940,11 @@ void RestApi::handleReboot() {
 }
 
 void RestApi::handleRootPortal() {
+    IDeviceController* ctrl = CraftThingyCore.getController();
+    if (ctrl != nullptr && ctrl->handleHttpRequest(_server, "/", "GET")) {
+        return;
+    }
+
     _server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     _server.sendHeader("Pragma", "no-cache");
     _server.sendHeader("Expires", "-1");
@@ -1078,6 +1083,12 @@ void RestApi::handleNotFound() {
         _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         _server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Signature, X-Timestamp, X-Nonce, X-Sequence, Authorization, X-Master-Key");
         _server.send(204);
+        return;
+    }
+
+    IDeviceController* ctrl = CraftThingyCore.getController();
+    String methodStr = (_server.method() == HTTP_GET) ? "GET" : ((_server.method() == HTTP_POST) ? "POST" : "OTHER");
+    if (ctrl != nullptr && ctrl->handleHttpRequest(_server, _server.uri(), methodStr)) {
         return;
     }
 

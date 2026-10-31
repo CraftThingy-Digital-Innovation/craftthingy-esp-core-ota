@@ -2,6 +2,14 @@
 
 #include <Arduino.h>
 
+#if defined(ESP8266)
+    #include <ESP8266WebServer.h>
+    typedef ESP8266WebServer ApiServerType;
+#elif defined(ESP32)
+    #include <WebServer.h>
+    typedef WebServer ApiServerType;
+#endif
+
 /**
  * @brief Abstract interface for application-specific controllers (e.g. Water Pump, Washing Machine).
  * 
@@ -36,4 +44,14 @@ public:
 
     // Gracefully shutdown actuators / place hardware in fail-safe state prior to flash reboot.
     virtual void prepareForUpdate() {}
+
+    // Optional HTTP Request Hook:
+    // Allows application controllers to intercept HTTP requests (e.g. serving custom UI or static assets from SD card).
+    // Returns true if the controller handled the request, false to fall back to Core default handlers.
+    virtual bool handleHttpRequest(ApiServerType& server, const String& uri, const String& method) {
+        (void)server;
+        (void)uri;
+        (void)method;
+        return false;
+    }
 };

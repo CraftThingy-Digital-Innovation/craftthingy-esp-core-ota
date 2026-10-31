@@ -15,6 +15,7 @@ class RestApi {
 public:
     static void init();
     static void loop();
+    static ApiServerType& getServer() { return _server; }
 
     // Verify HMAC-SHA256 rolling key signature or Bearer/Basic Auth
     static bool isRequestAuthorized(ApiServerType& server, String& outMethod);
