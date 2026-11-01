@@ -1,4 +1,4 @@
-# CraftThingy Over-The-Air (OTA) Rescue & Offline Upgrade Guide (Core v1.1.3 / App v1.1.8)
+# CraftThingy Over-The-Air (OTA) Rescue & Offline Upgrade Guide (Core v1.1.4 / App v1.1.9)
 
 ## Why is a Rescue Tool Needed?
 1. **Legacy ESP8266 v1.0.0 Firmware Buffer Limitations**:
