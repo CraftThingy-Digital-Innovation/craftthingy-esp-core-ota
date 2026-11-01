@@ -362,9 +362,31 @@ void RestApi::handleControllerCommand() {
         int payloadIdx = body.indexOf("\"payload\"");
         if (payloadIdx >= 0) {
             int start = body.indexOf(':', payloadIdx) + 1;
-            int q1 = body.indexOf('"', start);
-            int q2 = body.indexOf('"', q1 + 1);
-            if (q1 >= 0 && q2 > q1) payload = body.substring(q1 + 1, q2);
+            while (start < body.length() && (body[start] == ' ' || body[start] == '\t')) start++;
+            if (start < body.length() && body[start] == '{') {
+                int braceDepth = 0;
+                int end = start;
+                for (; end < body.length(); end++) {
+                    if (body[end] == '{') braceDepth++;
+                    else if (body[end] == '}') {
+                        braceDepth--;
+                        if (braceDepth == 0) { end++; break; }
+                    }
+                }
+                payload = body.substring(start, end);
+            } else if (start < body.length() && body[start] == '"') {
+                int q1 = start;
+                int end = q1 + 1;
+                while (end < body.length()) {
+                    if (body[end] == '"' && body[end - 1] != '\\') break;
+                    end++;
+                }
+                payload = body.substring(q1 + 1, end);
+                payload.replace("\\\"", "\"");
+            }
+        }
+        if (payload.length() == 0) {
+            payload = body;
         }
     }
 
