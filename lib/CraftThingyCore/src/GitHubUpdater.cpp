@@ -287,7 +287,7 @@ bool GitHubUpdater::fetchLatestRelease(const String& org, const String& repo,
 
                     // Check if current asset matches our board target tag!
                     if (currentAssetName.indexOf(assetTag) >= 0 || 
-                        currentAssetName.endsWith(".bin")) {
+                        (assetTag.length() == 0 && currentAssetName.endsWith(".bin"))) {
                         outInfo.downloadUrl = currentDownloadUrl;
                         outInfo.size = currentAssetSize;
                         outInfo.found = true;
@@ -472,7 +472,11 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
             ESP.restart();
             return true;
         } else {
-            _lastError = "OTA verification failed (" + String(Update.getError()) + ")";
+            if (written < contentLength) {
+                _lastError = "OTA download interrupted (" + String(written) + "/" + String(contentLength) + " bytes)";
+            } else {
+                _lastError = "OTA verification failed (" + String(Update.getError()) + ")";
+            }
             Update.end(false);
             _status = OTA_STATUS_FAILED;
             return false;

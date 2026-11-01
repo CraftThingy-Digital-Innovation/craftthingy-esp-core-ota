@@ -39,7 +39,7 @@
 // =================================================================
 // Default Configuration Constants
 // =================================================================
-#define CRAFT_CORE_VERSION          "1.1.4"
+#define CRAFT_CORE_VERSION          "1.1.5"
 #define CRAFT_DEFAULT_ORG           "CraftThingy-Digital-Innovation"
 #define CRAFT_DEFAULT_CORE_REPO     "craftthingy-esp-core-ota"
 
@@ -67,8 +67,9 @@
 
 // Buffer tuning for ESP8266 1MB Flash / RAM constraints
 #if defined(ESP8266)
-    #define CRAFT_TLS_BUFFER_SIZE   4096    // 4KB required for GitHub TLS certificate chain without MFLN!
-    #define CRAFT_STREAM_CHUNK_SIZE 512
+    #define CRAFT_DISABLE_MDNS      1       // Disable mDNS to save ~20KB Flash on 1MB ESP8266 modules
+    #define CRAFT_TLS_BUFFER_SIZE   16384   // Required for GitHub Releases / AWS CloudFront (16KB TLS records without MFLN)
+    #define CRAFT_STREAM_CHUNK_SIZE 1024
 #else
     #define CRAFT_TLS_BUFFER_SIZE   4096
     #define CRAFT_STREAM_CHUNK_SIZE 2048

@@ -1,10 +1,12 @@
 #include "WiFiManager.h"
 #include "ConfigStore.h"
 
+#ifndef CRAFT_DISABLE_MDNS
 #if defined(ESP8266)
     #include <ESP8266mDNS.h>
 #elif defined(ESP32)
     #include <ESPmDNS.h>
+#endif
 #endif
 
 CraftWiFiState WiFiManager::_state = WIFI_STATE_IDLE;
@@ -153,6 +155,7 @@ bool WiFiManager::retryStation() {
 }
 
 void WiFiManager::initMDNS() {
+#ifndef CRAFT_DISABLE_MDNS
     DeviceConfig& cfg = ConfigStore::get();
     String mdnsName = (strlen(cfg.deviceName) > 0) ? String(cfg.deviceName) : _apSSID;
     mdnsName.replace(" ", "-");
@@ -168,6 +171,7 @@ void WiFiManager::initMDNS() {
         MDNS.addService("http", "tcp", 80);
         _mdnsActive = true;
     }
+#endif
 #endif
 }
 
@@ -259,10 +263,12 @@ void WiFiManager::loop() {
         }
     }
 
+#ifndef CRAFT_DISABLE_MDNS
 #if defined(ESP8266)
     if (_mdnsActive) {
         MDNS.update();
     }
+#endif
 #endif
 }
 
