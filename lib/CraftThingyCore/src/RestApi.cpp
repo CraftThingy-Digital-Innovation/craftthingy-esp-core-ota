@@ -393,7 +393,11 @@ void RestApi::handleControllerCommand() {
     cmd.toLowerCase();
     String response;
     if (ctrl->handleCommand(cmd, payload, response)) {
-        sendStandardSuccess(response);
+        if (response.startsWith("{") || response.startsWith("[")) {
+            sendStandardResponse(200, response);
+        } else {
+            sendStandardSuccess(response);
+        }
     } else {
         sendStandardError(400, "Unknown command or execution failed", cmd);
     }
