@@ -177,15 +177,28 @@ bool GitHubUpdater::fetchLatestRelease(const String& org, const String& repo,
 
     WiFiClientSecure client;
 #if defined(ESP8266)
-    client.setBufferSizes(CRAFT_TLS_BUFFER_SIZE, 512);
+    // api.github.com supports MFLN (RFC 6066); 2048B buffer is ample for JSON release metadata and prevents OOM on ESP8266
+    client.setBufferSizes(2048, 512);
     client.setInsecure();
 #elif defined(ESP32)
     client.setInsecure();
 #endif
 
     const char* host = "api.github.com";
+    IPAddress resolvedIp;
+    if (WiFi.hostByName(host, resolvedIp) != 1) {
+        _lastError = "DNS failed for " + String(host);
+        return false;
+    }
+
     if (!client.connect(host, 443)) {
-        _lastError = "Failed to connect to api.github.com";
+#if defined(ESP8266)
+        char bsslErr[64] = {0};
+        client.getLastSSLError(bsslErr, sizeof(bsslErr));
+        _lastError = "Failed to connect to " + String(host) + ": " + String(bsslErr);
+#else
+        _lastError = "Failed to connect to " + String(host);
+#endif
         return false;
     }
 
@@ -335,8 +348,20 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
 #endif
 
         uint16_t port = isHttps ? 443 : 80;
+        IPAddress resolvedIp;
+        if (WiFi.hostByName(host.c_str(), resolvedIp) != 1) {
+            _lastError = "DNS failed for " + host;
+            return false;
+        }
+
         if (!client.connect(host.c_str(), port)) {
+#if defined(ESP8266)
+            char bsslErr[64] = {0};
+            client.getLastSSLError(bsslErr, sizeof(bsslErr));
+            _lastError = "Connection failed to " + host + ": " + String(bsslErr);
+#else
             _lastError = "Connection failed to " + host;
+#endif
             return false;
         }
 
