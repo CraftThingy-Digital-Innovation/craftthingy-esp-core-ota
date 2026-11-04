@@ -1,3 +1,4 @@
+#ifndef CRAFT_RESCUE_MODE
 #include "RestApi.h"
 #include "ConfigStore.h"
 #include "WiFiManager.h"
@@ -1130,3 +1131,5 @@ void RestApi::handleNotFound() {
 
     sendStandardError(404, "Endpoint not found", _server.uri());
 }
+
+#endif // CRAFT_RESCUE_MODE

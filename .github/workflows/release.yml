@@ -39,6 +39,7 @@ jobs:
       - name: Build All Board Targets
         run: |
           pio run -e esp01_1m
+          pio run -e esp01_rescue
           pio run -e esp32dev
           pio run -e esp32s3
           pio run -e esp32c3
@@ -48,6 +49,7 @@ jobs:
         run: |
           mkdir -p release_assets
           cp .pio/build/esp01_1m/firmware.bin release_assets/firmware-esp01s.bin
+          cp .pio/build/esp01_rescue/firmware.bin release_assets/firmware-rescue-esp01s.bin
           cp .pio/build/esp32dev/firmware.bin release_assets/firmware-esp32.bin
           cp .pio/build/esp32s3/firmware.bin release_assets/firmware-esp32s3.bin
           cp .pio/build/esp32c3/firmware.bin release_assets/firmware-esp32c3.bin

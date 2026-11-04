@@ -1,3 +1,4 @@
+#ifndef CRAFT_RESCUE_MODE
 #include "WiFiManager.h"
 #include "ConfigStore.h"
 
@@ -431,3 +432,5 @@ bool WiFiManager::applyIpConfig() {
     return false;
 }
 
+
+#endif // CRAFT_RESCUE_MODE

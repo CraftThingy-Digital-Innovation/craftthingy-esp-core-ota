@@ -1,3 +1,4 @@
+#ifndef CRAFT_RESCUE_MODE
 #include "PinManager.h"
 
 PinRoleDefinition PinManager::_registeredRoles[CRAFT_MAX_PIN_ROLES];
@@ -380,3 +381,5 @@ const PinRoleDefinition* PinManager::getRoleDef(uint8_t index) {
     if (index >= _registeredRoleCount) return nullptr;
     return &_registeredRoles[index];
 }
+
+#endif // CRAFT_RESCUE_MODE

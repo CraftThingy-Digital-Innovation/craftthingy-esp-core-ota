@@ -1,3 +1,4 @@
+#ifndef CRAFT_RESCUE_MODE
 #include "GitHubUpdater.h"
 #include "ConfigStore.h"
 #include "ModuleDetector.h"
@@ -511,3 +512,5 @@ bool GitHubUpdater::streamOtaFromUrl(const String& url, size_t expectedSize) {
     _lastError = "Too many HTTP redirects";
     return false;
 }
+
+#endif // CRAFT_RESCUE_MODE

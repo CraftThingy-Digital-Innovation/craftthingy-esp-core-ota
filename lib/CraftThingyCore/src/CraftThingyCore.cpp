@@ -1,3 +1,4 @@
+#ifndef CRAFT_RESCUE_MODE
 #include "CraftThingyCore.h"
 
 CraftThingyCoreClass CraftThingyCore;
@@ -76,3 +77,5 @@ bool CraftThingyCoreClass::isWiFiConnected() {
 bool CraftThingyCoreClass::isAPMode() {
     return WiFiManager::isAPMode();
 }
+
+#endif // CRAFT_RESCUE_MODE
