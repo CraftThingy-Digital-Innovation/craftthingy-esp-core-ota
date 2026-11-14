@@ -99,7 +99,11 @@ String ModuleDetector::scanI2cPeripherals(uint8_t sdaPin, uint8_t sclPin) {
 }
 
 void ModuleDetector::probePeripherals() {
-#if defined(ESP8266)
+#if defined(CRAFT_SKIP_I2C_PROBE)
+    _fingerprint.detectedPeripheral = "None";
+    _fingerprint.detectedRole = ROLE_UNASSIGNED;
+    _fingerprint.roleString = "generic";
+#elif defined(ESP8266)
     _fingerprint.detectedPeripheral = "None";
     _fingerprint.detectedRole = ROLE_UNASSIGNED;
     _fingerprint.roleString = "generic";
