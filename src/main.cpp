@@ -15,7 +15,7 @@ void setup() {
     ModuleDetector::init();
     const HardwareFingerprint& fp = ModuleDetector::getFingerprint();
     Serial.printf("Chip Detected : %s (%s)\n", fp.chipName, fp.archTag);
-    Serial.printf("Flash Size    : %u bytes\n", fp.flashSizeBytes);
+    Serial.printf("Flash Size    : %lu bytes\n", (unsigned long)fp.flashSizeBytes);
     Serial.printf("MAC Address   : %s\n", fp.macAddress.c_str());
 
     // Initialize all networking, security, REST API, PinManager, and GitHub OTA updater

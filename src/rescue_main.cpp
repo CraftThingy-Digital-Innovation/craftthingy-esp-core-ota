@@ -1,3 +1,5 @@
+#if defined(ESP8266)
+
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -286,3 +288,5 @@ void loop() {
     }
     yield();
 }
+
+#endif // ESP8266
